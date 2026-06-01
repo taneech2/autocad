@@ -691,7 +691,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
            }
            onCommandComplete();
         }
-      }
     } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') {
        if (commandStep === 1 && typeof input === 'object' && 'x' in input) {
          setTempPoints([input]);
