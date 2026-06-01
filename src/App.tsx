@@ -83,7 +83,8 @@ function App() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' || e.key === ' ') {
+      if (e.key === ' ') e.preventDefault();
       const input = commandInput.trim().toUpperCase();
       setHistory(prev => [...prev, `> ${commandInput}`]);
       setCommandInput('');
