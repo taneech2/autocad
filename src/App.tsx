@@ -12,6 +12,7 @@ interface LessonParams {
   l3_circX: number; l3_circY: number; l3_circR: number;
   l4_circX: number; l4_circY: number; l4_circR: number; l4_copyDx: number;
   l5_cx: number; l5_cy: number; l5_len: number;
+  l6_x: number; l6_y: number; l6_len: number; l6_ang: number;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -22,7 +23,8 @@ const generateRandomParams = (): LessonParams => {
     l3_rectX: randInt(-8, -2), l3_rectY: randInt(0, 5), l3_rectW: randInt(2, 5), l3_rectH: randInt(2, 5),
     l3_circX: randInt(2, 8), l3_circY: randInt(0, 5), l3_circR: randInt(1, 4),
     l4_circX: randInt(-5, 5), l4_circY: randInt(-5, 5), l4_circR: randInt(1, 3), l4_copyDx: randInt(3, 7),
-    l5_cx: randInt(-2, 2), l5_cy: randInt(-2, 2), l5_len: randInt(4, 6)
+    l5_cx: randInt(-2, 2), l5_cy: randInt(-2, 2), l5_len: randInt(4, 6),
+    l6_x: randInt(-3, 3), l6_y: randInt(-3, 3), l6_len: randInt(3, 6), l6_ang: [90, -90, 45, -45][randInt(0, 3)]
   };
 };
 
@@ -93,6 +95,8 @@ function App() {
         else if (input === 'M' || input === 'MOVE') handleCommandClick('MOVE');
         else if (input === 'CO' || input === 'CP' || input === 'COPY') handleCommandClick('COPY');
         else if (input === 'TR' || input === 'TRIM') handleCommandClick('TRIM');
+        else if (input === 'RO' || input === 'ROTATE') handleCommandClick('ROTATE');
+        else if (input === 'SC' || input === 'SCALE') handleCommandClick('SCALE');
         else if (input === 'P' || input === 'PAN') handleCommandClick('PAN');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
@@ -142,6 +146,29 @@ function App() {
          return acc + Math.sqrt(dx*dx + dy*dy);
       }, 0);
       if (lines.length >= 2 && Math.abs(totalLen - (1.5 * lessonParams.l5_len)) < 0.5) passed = true;
+    } else if (currentLesson === 6) {
+      const lines = entities.filter(e => e.type === 'LINE') as any[];
+      if (lines.length === 1) {
+         const l = lines[0];
+         // Check if line rotated correctly. It should start at l6_x, l6_y.
+         // And length should be l6_len.
+         // And angle should be l6_ang.
+         const dx = l.end.x - l.start.x;
+         const dy = l.end.y - l.start.y;
+         const len = Math.sqrt(dx*dx + dy*dy);
+         const ang = Math.atan2(dy, dx) * (180 / Math.PI);
+         let targetAng = lessonParams.l6_ang;
+         if (targetAng < -180) targetAng += 360;
+         if (targetAng > 180) targetAng -= 360;
+         
+         let actualAng = ang;
+         if (actualAng < -180) actualAng += 360;
+         if (actualAng > 180) actualAng -= 360;
+
+         if (Math.abs(l.start.x - lessonParams.l6_x) < 0.1 && Math.abs(l.start.y - lessonParams.l6_y) < 0.1 && Math.abs(len - lessonParams.l6_len) < 0.1 && Math.abs(actualAng - targetAng) < 1) {
+            passed = true;
+         }
+      }
     }
 
     if (passed) {
@@ -203,8 +230,8 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <button onClick={() => { setCurrentLesson(Math.max(1, currentLesson - 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
-            <span>บทเรียน (Lesson {currentLesson}/5)</span>
-            <button onClick={() => { setCurrentLesson(Math.min(5, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            <span>บทเรียน (Lesson {currentLesson}/6)</span>
+            <button onClick={() => { setCurrentLesson(Math.min(6, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
           <div className="sidebar-content">
@@ -289,6 +316,20 @@ function App() {
                   <li>วาดเส้นตั้ง: พิมพ์ <code>L</code> -&gt; <code>{lessonParams.l5_cx},{lessonParams.l5_cy - lessonParams.l5_len/2}</code> -&gt; <code>@0,{lessonParams.l5_len}</code> -&gt; Enter</li>
                   <li>พิมพ์ <code>TRIM</code> กด Enter (คุณจะเห็นกากบาท)</li>
                   <li><i>Select object:</i> นำเมาส์ไป <strong>คลิกที่เส้นตั้ง "ท่อนบน"</strong> เพื่อลบมันทิ้ง (ระบบจะหาจุดตัดกึ่งกลางให้อัตโนมัติ!)</li>
+                </ol>
+              </>
+            )}
+
+            {currentLesson === 6 && (
+              <>
+                <h3>บทที่ 6: การหมุนและการย่อขยาย</h3>
+                <p>เรียนรู้คำสั่ง <strong>ROTATE</strong> และ <strong>SCALE</strong></p>
+                <ol>
+                  <li>พิมพ์ <code>L</code> วาดเส้นจาก <code>{lessonParams.l6_x},{lessonParams.l6_y}</code> ไปทางขวา <code>@{lessonParams.l6_len},0</code></li>
+                  <li>พิมพ์ <code>RO</code> (ROTATE) แล้วกด Enter</li>
+                  <li>คลิกเลือกเส้นที่วาด แล้วกด Enter</li>
+                  <li><i>Base point:</i> ใช้เมาส์ดูดจุดปลายทางซ้าย (จุดเริ่มต้น)</li>
+                  <li><i>Rotation angle:</i> พิมพ์ <code>{lessonParams.l6_ang}</code> แล้วกด Enter เพื่อหมุน</li>
                 </ol>
               </>
             )}

@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useState, MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
+import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { parseCoordinate } from './CommandEngine';
 
 export interface Point { x: number; y: number; }
@@ -60,6 +61,26 @@ const getLineSegmentIntersection = (p1: Point, p2: Point, p3: Point, p4: Point):
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+// Math helpers
+const rotatePoint = (pt: Point, origin: Point, angleDeg: number): Point => {
+  const rad = angleDeg * (Math.PI / 180);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = pt.x - origin.x;
+  const dy = pt.y - origin.y;
+  return {
+    x: origin.x + (dx * cos - dy * sin),
+    y: origin.y + (dx * sin + dy * cos)
+  };
+};
+
+const scalePoint = (pt: Point, origin: Point, factor: number): Point => {
+  return {
+    x: origin.x + (pt.x - origin.x) * factor,
+    y: origin.y + (pt.y - origin.y) * factor
+  };
+};
+
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({ 
   activeCommand, 
   typedInput,
@@ -118,6 +139,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       else if (commandStep === 2) onPromptChange(`${activeCommand} Specify second point of displacement:`);
     } else if (activeCommand === 'TRIM') {
       onPromptChange('TRIM Select object to trim (Line only):');
+    } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE') {
+      if (commandStep === 0) onPromptChange(`${activeCommand} Select objects: (${selectedIds.size} found) [Press Enter to continue]`);
+      else if (commandStep === 1) onPromptChange(`${activeCommand} Specify base point:`);
+      else if (commandStep === 2) onPromptChange(`${activeCommand} Specify factor/angle:`);
     }
   }, [activeCommand, commandStep, selectedIds.size, onPromptChange]);
 
@@ -125,7 +150,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   useEffect(() => {
     if (typedInput && activeCommand) {
       if (typedInput === 'ENTER_KEY') {
-        if ((activeCommand === 'MOVE' || activeCommand === 'COPY') && commandStep === 0) {
+        if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE') && commandStep === 0) {
           if (selectedIds.size > 0) setCommandStep(1);
         } else if (activeCommand === 'LINE' && commandStep === 1) {
           onCommandComplete();
@@ -178,7 +203,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     });
 
     setSnapPoint(bestSnap);
-    return bestSnap ? bestSnap.point : worldPos;
+    const bs = bestSnap as {point: Point, type: 'endpoint'|'center'} | null;
+    return bs ? bs.point : worldPos;
   };
 
   // Hit testing
@@ -350,15 +376,60 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
           else if (entity.type === 'CIRCLE') drawEntity(ctx, { ...entity, center: {x: entity.center.x + dx, y: entity.center.y + dy} }, false, true);
           else if (entity.type === 'RECTANGLE') drawEntity(ctx, { ...entity, p1: {x: entity.p1.x + dx, y: entity.p1.y + dy}, p2: {x: entity.p2.x + dx, y: entity.p2.y + dy} }, false, true);
         });
+      } else if (commandStep === 2 && tempPoints.length > 0) {
+         const origin = tempPoints[0];
+         if (activeCommand === 'ROTATE') {
+           const angle = Math.atan2(cursorPos.y - origin.y, cursorPos.x - origin.x) * (180 / Math.PI);
+           ctx.globalAlpha = 0.5;
+           entities.forEach(entity => {
+              if (selectedIds.has(entity.id)) {
+                 ctx.beginPath();
+                 if (entity.type === 'LINE') {
+                   const s = rotatePoint(entity.start, origin, angle);
+                   const e = rotatePoint(entity.end, origin, angle);
+                   ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y);
+                 } else if (entity.type === 'CIRCLE') {
+                   const c = rotatePoint(entity.center, origin, angle);
+                   ctx.arc(c.x, c.y, entity.radius, 0, 2 * Math.PI);
+                 }
+                 ctx.stroke();
+              }
+           });
+           ctx.globalAlpha = 1.0;
+         } else if (activeCommand === 'SCALE') {
+           const dNew = distance(origin, cursorPos);
+           const factor = dNew > 0 ? dNew : 1;
+           ctx.globalAlpha = 0.5;
+           entities.forEach(entity => {
+              if (selectedIds.has(entity.id)) {
+                 ctx.beginPath();
+                 if (entity.type === 'LINE') {
+                   const s = scalePoint(entity.start, origin, factor);
+                   const e = scalePoint(entity.end, origin, factor);
+                   ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y);
+                 } else if (entity.type === 'CIRCLE') {
+                   const c = scalePoint(entity.center, origin, factor);
+                   ctx.arc(c.x, c.y, entity.radius * factor, 0, 2 * Math.PI);
+                 } else if (entity.type === 'RECTANGLE') {
+                   const p1 = scalePoint(entity.p1, origin, factor);
+                   const p2 = scalePoint(entity.p2, origin, factor);
+                   ctx.rect(Math.min(p1.x, p2.x), Math.min(p1.y, p2.y), Math.abs(p2.x - p1.x), Math.abs(p2.y - p1.y));
+                 }
+                 ctx.stroke();
+              }
+           });
+           ctx.globalAlpha = 1.0;
+         }
       }
 
       if (snapPoint) {
+        const sp = snapPoint as {point: Point, type: 'endpoint'|'center'};
         ctx.strokeStyle = '#ffff00'; 
         ctx.lineWidth = 2 / zoom;
         const size = 10 / zoom;
         ctx.beginPath();
-        if (snapPoint.type === 'endpoint') ctx.rect(snapPoint.point.x - size/2, snapPoint.point.y - size/2, size, size);
-        else if (snapPoint.type === 'center') ctx.arc(snapPoint.point.x, snapPoint.point.y, size/2, 0, 2 * Math.PI);
+        if (sp.type === 'endpoint') ctx.rect(sp.point.x - size/2, sp.point.y - size/2, size, size);
+        else if (sp.type === 'center') ctx.arc(sp.point.x, sp.point.y, size/2, 0, 2 * Math.PI);
         ctx.stroke();
       }
 
@@ -366,7 +437,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       
       ctx.strokeStyle = '#cccccc';
       ctx.lineWidth = 1;
-      const effectivePos = snapPoint ? snapPoint.point : cursorPos;
+      const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;
+      const effectivePos = sp ? sp.point : cursorPos;
       const screenX = (effectivePos.x * zoom) + canvas.width/2 + pan.x;
       const screenY = (-effectivePos.y * zoom) + canvas.height/2 + pan.y;
       
@@ -432,9 +504,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     if (e.button === 0 && activeCommand) {
       const wPos = getWorldCoord(e);
       const roundedPos = { x: Math.round(wPos.x * 2) / 2, y: Math.round(wPos.y * 2) / 2 };
-      const pt = snapPoint ? snapPoint.point : roundedPos;
+      const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;
+      const pt = sp ? sp.point : roundedPos;
       
-      if ((activeCommand === 'MOVE' || activeCommand === 'COPY') && commandStep === 0) {
+      if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE') && commandStep === 0) {
          const hitId = hitTest(wPos);
          if (hitId) {
             setSelectedIds(prev => {
@@ -541,6 +614,41 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         });
         onCommandComplete();
       }
+    } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE') {
+       if (commandStep === 1 && typeof input === 'object' && 'x' in input) {
+         setTempPoints([input]);
+         setCommandStep(2);
+       } else if (commandStep === 2 && typeof input === 'object' && 'x' in input) {
+         const origin = tempPoints[0];
+         setEntities(prev => {
+            const next = [...prev];
+            if (activeCommand === 'ROTATE') {
+              const angle = Math.atan2(input.y - origin.y, input.x - origin.x) * (180 / Math.PI);
+              selectedIds.forEach(id => {
+                const idx = next.findIndex(e => e.id === id);
+                if (idx >= 0) {
+                   const e = next[idx];
+                   if (e.type === 'LINE') next[idx] = { ...e, start: rotatePoint(e.start, origin, angle), end: rotatePoint(e.end, origin, angle) };
+                   else if (e.type === 'CIRCLE') next[idx] = { ...e, center: rotatePoint(e.center, origin, angle) };
+                   else if (e.type === 'RECTANGLE') next[idx] = { ...e, type: 'LINE', start: rotatePoint(e.p1, origin, angle), end: rotatePoint(e.p2, origin, angle) };
+                }
+              });
+            } else if (activeCommand === 'SCALE') {
+               const factor = distance(origin, input);
+               selectedIds.forEach(id => {
+                const idx = next.findIndex(e => e.id === id);
+                if (idx >= 0) {
+                   const e = next[idx];
+                   if (e.type === 'LINE') next[idx] = { ...e, start: scalePoint(e.start, origin, factor), end: scalePoint(e.end, origin, factor) };
+                   else if (e.type === 'CIRCLE') next[idx] = { ...e, center: scalePoint(e.center, origin, factor), radius: e.radius * factor };
+                   else if (e.type === 'RECTANGLE') next[idx] = { ...e, p1: scalePoint(e.p1, origin, factor), p2: scalePoint(e.p2, origin, factor) };
+                }
+               });
+            }
+            return next;
+         });
+         onCommandComplete();
+       }
     }
   };
 
@@ -550,7 +658,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       if (e.key === 'Escape') {
         onCommandComplete();
       } else if (e.key === 'Enter') {
-         if ((activeCommand === 'MOVE' || activeCommand === 'COPY') && commandStep === 0) {
+         if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE') && commandStep === 0) {
            if (selectedIds.size > 0) setCommandStep(1);
          } else if (activeCommand === 'LINE' && commandStep === 1) {
            onCommandComplete();
