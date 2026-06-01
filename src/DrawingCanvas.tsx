@@ -81,6 +81,18 @@ const scalePoint = (pt: Point, origin: Point, factor: number): Point => {
   };
 };
 
+const mirrorPoint = (pt: Point, p1: Point, p2: Point): Point => {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  if (dx === 0 && dy === 0) return pt;
+  const a = (dx * dx - dy * dy) / (dx * dx + dy * dy);
+  const b = 2 * dx * dy / (dx * dx + dy * dy);
+  return {
+    x: a * (pt.x - p1.x) + b * (pt.y - p1.y) + p1.x,
+    y: b * (pt.x - p1.x) - a * (pt.y - p1.y) + p1.y
+  };
+};
+
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({ 
   activeCommand, 
   typedInput,
@@ -139,10 +151,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       else if (commandStep === 2) onPromptChange(`${activeCommand} Specify second point of displacement:`);
     } else if (activeCommand === 'TRIM') {
       onPromptChange('TRIM Select object to trim (Line only):');
-    } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE') {
+    } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') {
       if (commandStep === 0) onPromptChange(`${activeCommand} Select objects: (${selectedIds.size} found) [Press Enter to continue]`);
-      else if (commandStep === 1) onPromptChange(`${activeCommand} Specify base point:`);
-      else if (commandStep === 2) onPromptChange(`${activeCommand} Specify factor/angle:`);
+      else if (commandStep === 1) onPromptChange(`${activeCommand} Specify first point of mirror line / base point:`);
+      else if (commandStep === 2) onPromptChange(`${activeCommand} Specify second point / factor / angle:`);
+    } else if (activeCommand === 'OFFSET') {
+      if (commandStep === 0) onPromptChange(`OFFSET Specify offset distance:`);
+      else if (commandStep === 1) onPromptChange(`OFFSET Select object to offset:`);
     }
   }, [activeCommand, commandStep, selectedIds.size, onPromptChange]);
 
@@ -150,7 +165,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   useEffect(() => {
     if (typedInput && activeCommand) {
       if (typedInput === 'ENTER_KEY') {
-        if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE') && commandStep === 0) {
+        if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') && commandStep === 0) {
           if (selectedIds.size > 0) setCommandStep(1);
         } else if (activeCommand === 'LINE' && commandStep === 1) {
           onCommandComplete();
@@ -419,6 +434,29 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
               }
            });
            ctx.globalAlpha = 1.0;
+         } else if (activeCommand === 'MIRROR') {
+           const p1 = tempPoints[0];
+           const p2 = cursorPos;
+           ctx.globalAlpha = 0.5;
+           entities.forEach(entity => {
+              if (selectedIds.has(entity.id)) {
+                 ctx.beginPath();
+                 if (entity.type === 'LINE') {
+                   const s = mirrorPoint(entity.start, p1, p2);
+                   const e = mirrorPoint(entity.end, p1, p2);
+                   ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y);
+                 } else if (entity.type === 'CIRCLE') {
+                   const c = mirrorPoint(entity.center, p1, p2);
+                   ctx.arc(c.x, c.y, entity.radius, 0, 2 * Math.PI);
+                 } else if (entity.type === 'RECTANGLE') {
+                   const m1 = mirrorPoint(entity.p1, p1, p2);
+                   const m2 = mirrorPoint(entity.p2, p1, p2);
+                   ctx.rect(Math.min(m1.x, m2.x), Math.min(m1.y, m2.y), Math.abs(m2.x - m1.x), Math.abs(m2.y - m1.y));
+                 }
+                 ctx.stroke();
+              }
+           });
+           ctx.globalAlpha = 1.0;
          }
       }
 
@@ -507,7 +545,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;
       const pt = sp ? sp.point : roundedPos;
       
-      if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE') && commandStep === 0) {
+      if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') && commandStep === 0) {
          const hitId = hitTest(wPos);
          if (hitId) {
             setSelectedIds(prev => {
@@ -613,8 +651,45 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
           return next;
         });
         onCommandComplete();
+      } else if (activeCommand === 'OFFSET' && commandStep === 1) {
+        const hitId = hitTest(wPos);
+        if (hitId) {
+           const dist = tempPoints[0].x;
+           const target = entities.find(e => e.id === hitId);
+           if (target) {
+              if (target.type === 'CIRCLE') {
+                 const r = target.radius + dist;
+                 if (r > 0) onEntitiesChange([...entities, { ...target, id: generateId(), radius: r }]);
+              } else if (target.type === 'RECTANGLE') {
+                 // expand outwards
+                 const w = Math.abs(target.p2.x - target.p1.x);
+                 const h = Math.abs(target.p2.y - target.p1.y);
+                 const cx = (target.p1.x + target.p2.x) / 2;
+                 const cy = (target.p1.y + target.p2.y) / 2;
+                 const p1 = { x: cx - (w/2 + dist), y: cy - (h/2 + dist) };
+                 const p2 = { x: cx + (w/2 + dist), y: cy + (h/2 + dist) };
+                 onEntitiesChange([...entities, { ...target, id: generateId(), p1, p2 }]);
+              } else if (target.type === 'LINE') {
+                 // Offset line by distance in its normal direction
+                 const dx = target.end.x - target.start.x;
+                 const dy = target.end.y - target.start.y;
+                 const len = Math.sqrt(dx*dx + dy*dy);
+                 if (len > 0) {
+                    const nx = -dy / len;
+                    const ny = dx / len;
+                    // Determine which side clicked point is on
+                    const cross = (wPos.x - target.start.x) * dy - (wPos.y - target.start.y) * dx;
+                    const dir = cross > 0 ? 1 : -1;
+                    const start = { x: target.start.x + nx * dist * dir, y: target.start.y + ny * dist * dir };
+                    const end = { x: target.end.x + nx * dist * dir, y: target.end.y + ny * dist * dir };
+                    onEntitiesChange([...entities, { ...target, id: generateId(), start, end }]);
+                 }
+              }
+           }
+           onCommandComplete();
+        }
       }
-    } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE') {
+    } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') {
        if (commandStep === 1 && typeof input === 'object' && 'x' in input) {
          setTempPoints([input]);
          setCommandStep(2);
@@ -644,6 +719,22 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                    else if (e.type === 'RECTANGLE') next[idx] = { ...e, p1: scalePoint(e.p1, origin, factor), p2: scalePoint(e.p2, origin, factor) };
                 }
                });
+            } else if (activeCommand === 'MIRROR') {
+               const p1 = origin;
+               const p2 = input;
+               selectedIds.forEach(id => {
+                const idx = next.findIndex(e => e.id === id);
+                if (idx >= 0) {
+                   const e = next[idx];
+                   if (e.type === 'LINE') {
+                     next.push({ ...e, id: generateId(), start: mirrorPoint(e.start, p1, p2), end: mirrorPoint(e.end, p1, p2) });
+                   } else if (e.type === 'CIRCLE') {
+                     next.push({ ...e, id: generateId(), center: mirrorPoint(e.center, p1, p2) });
+                   } else if (e.type === 'RECTANGLE') {
+                     next.push({ ...e, id: generateId(), p1: mirrorPoint(e.p1, p1, p2), p2: mirrorPoint(e.p2, p1, p2) });
+                   }
+                }
+               });
             }
             return next;
          });
@@ -658,7 +749,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       if (e.key === 'Escape') {
         onCommandComplete();
       } else if (e.key === 'Enter') {
-         if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE') && commandStep === 0) {
+         if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') && commandStep === 0) {
            if (selectedIds.size > 0) setCommandStep(1);
          } else if (activeCommand === 'LINE' && commandStep === 1) {
            onCommandComplete();

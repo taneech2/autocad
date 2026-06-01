@@ -13,6 +13,7 @@ interface LessonParams {
   l4_circX: number; l4_circY: number; l4_circR: number; l4_copyDx: number;
   l5_cx: number; l5_cy: number; l5_len: number;
   l6_x: number; l6_y: number; l6_len: number; l6_ang: number;
+  l7_cx: number; l7_cy: number; l7_r: number; l7_dist: number;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -24,7 +25,8 @@ const generateRandomParams = (): LessonParams => {
     l3_circX: randInt(2, 8), l3_circY: randInt(0, 5), l3_circR: randInt(1, 4),
     l4_circX: randInt(-5, 5), l4_circY: randInt(-5, 5), l4_circR: randInt(1, 3), l4_copyDx: randInt(3, 7),
     l5_cx: randInt(-2, 2), l5_cy: randInt(-2, 2), l5_len: randInt(4, 6),
-    l6_x: randInt(-3, 3), l6_y: randInt(-3, 3), l6_len: randInt(3, 6), l6_ang: [90, -90, 45, -45][randInt(0, 3)]
+    l6_x: randInt(-3, 3), l6_y: randInt(-3, 3), l6_len: randInt(3, 6), l6_ang: [90, -90, 45, -45][randInt(0, 3)],
+    l7_cx: randInt(-5, 5), l7_cy: randInt(-5, 5), l7_r: randInt(2, 4), l7_dist: randInt(1, 3)
   };
 };
 
@@ -98,6 +100,8 @@ function App() {
         else if (input === 'TR' || input === 'TRIM') handleCommandClick('TRIM');
         else if (input === 'RO' || input === 'ROTATE') handleCommandClick('ROTATE');
         else if (input === 'SC' || input === 'SCALE') handleCommandClick('SCALE');
+        else if (input === 'MI' || input === 'MIRROR') handleCommandClick('MIRROR');
+        else if (input === 'O' || input === 'OFFSET') handleCommandClick('OFFSET');
         else if (input === 'P' || input === 'PAN') handleCommandClick('PAN');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
@@ -170,6 +174,13 @@ function App() {
             passed = true;
          }
       }
+    } else if (currentLesson === 7) {
+      const circles = entities.filter(e => e.type === 'CIRCLE') as any[];
+      if (circles.length >= 2) {
+         const hasOriginal = circles.some(c => Math.abs(c.radius - lessonParams.l7_r) < 0.1);
+         const hasOffset = circles.some(c => Math.abs(c.radius - (lessonParams.l7_r + lessonParams.l7_dist)) < 0.1);
+         if (hasOriginal && hasOffset) passed = true;
+      }
     }
 
     if (passed) {
@@ -231,8 +242,8 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <button onClick={() => { setCurrentLesson(Math.max(1, currentLesson - 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
-            <span>บทเรียน (Lesson {currentLesson}/6)</span>
-            <button onClick={() => { setCurrentLesson(Math.min(6, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            <span>บทเรียน (Lesson {currentLesson}/7)</span>
+            <button onClick={() => { setCurrentLesson(Math.min(7, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
           <div className="sidebar-content">
@@ -331,6 +342,20 @@ function App() {
                   <li>คลิกเลือกเส้นที่วาด แล้วกด Enter</li>
                   <li><i>Base point:</i> ใช้เมาส์ดูดจุดปลายทางซ้าย (จุดเริ่มต้น)</li>
                   <li><i>Rotation angle:</i> พิมพ์ <code>{lessonParams.l6_ang}</code> แล้วกด Enter เพื่อหมุน</li>
+                </ol>
+              </>
+            )}
+
+            {currentLesson === 7 && (
+              <>
+                <h3>บทที่ 7: การคัดลอกแบบสมมาตรและเส้นขนาน</h3>
+                <p>เรียนรู้คำสั่ง <strong>MIRROR</strong> (สะท้อน) และ <strong>OFFSET</strong> (สร้างเส้นคู่ขนาน)</p>
+                <ol>
+                  <li>พิมพ์ <code>C</code> สร้างวงกลมที่ <code>{lessonParams.l7_cx},{lessonParams.l7_cy}</code> รัศมี <code>{lessonParams.l7_r}</code></li>
+                  <li>พิมพ์ <code>O</code> (OFFSET) หรือคลิกปุ่ม Offset</li>
+                  <li>พิมพ์ระยะห่าง <code>{lessonParams.l7_dist}</code> แล้วกด Enter</li>
+                  <li>คลิกที่เส้นขอบวงกลม แล้วเลื่อนเมาส์ออกมาคลิกด้านนอกวงกลม</li>
+                  <li>ระบบจะสร้างวงกลมใหม่ที่ขยายใหญ่ขึ้น (รัศมี {lessonParams.l7_r + lessonParams.l7_dist})</li>
                 </ol>
               </>
             )}
