@@ -566,7 +566,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         return;
       }
 
-      handleCommandInput(pt);
+      handleCommandInput(pt, wPos);
     }
   };
 
@@ -578,7 +578,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     setZoom(prev => Math.max(2, prev * (direction > 0 ? 1.1 : 0.9)));
   };
 
-  const handleCommandInput = (input: Point | number | string) => {
+  const handleCommandInput = (input: Point | number | string, rawWPos?: Point) => {
     if (activeCommand === 'LINE') {
       if (input === 'UNDO' && tempPoints.length > 0) {
         setEntities(prev => {
@@ -655,7 +655,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     } else if (activeCommand === 'OFFSET' && commandStep === 1) {
         if (typeof input !== 'object' || !('x' in input)) return;
         const pt = input as Point;
-        const hitId = hitTest(pt);
+        const clickPos = rawWPos || pt;
+        const hitId = hitTest(clickPos);
         if (hitId) {
            const dist = tempPoints[0].x;
            const target = entities.find(e => e.id === hitId);
@@ -681,7 +682,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                     const nx = -dy / len;
                     const ny = dx / len;
                     // Determine which side clicked point is on
-                    const cross = (pt.x - target.start.x) * dy - (pt.y - target.start.y) * dx;
+                    const cross = (clickPos.x - target.start.x) * dy - (clickPos.y - target.start.y) * dx;
                     const dir = cross > 0 ? 1 : -1;
                     const start = { x: target.start.x + nx * dist * dir, y: target.start.y + ny * dist * dir };
                     const end = { x: target.end.x + nx * dist * dir, y: target.end.y + ny * dist * dir };
