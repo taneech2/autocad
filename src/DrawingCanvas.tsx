@@ -652,14 +652,16 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         });
         onCommandComplete();
       } else if (activeCommand === 'OFFSET' && commandStep === 1) {
-        const hitId = hitTest(wPos);
+        if (typeof input !== 'object' || !('x' in input)) return;
+        const pt = input as Point;
+        const hitId = hitTest(pt);
         if (hitId) {
            const dist = tempPoints[0].x;
            const target = entities.find(e => e.id === hitId);
            if (target) {
               if (target.type === 'CIRCLE') {
                  const r = target.radius + dist;
-                 if (r > 0) onEntitiesChange([...entities, { ...target, id: generateId(), radius: r }]);
+                 if (r > 0) setEntities(prev => [...prev, { ...target, id: generateId(), radius: r }]);
               } else if (target.type === 'RECTANGLE') {
                  // expand outwards
                  const w = Math.abs(target.p2.x - target.p1.x);
@@ -668,7 +670,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                  const cy = (target.p1.y + target.p2.y) / 2;
                  const p1 = { x: cx - (w/2 + dist), y: cy - (h/2 + dist) };
                  const p2 = { x: cx + (w/2 + dist), y: cy + (h/2 + dist) };
-                 onEntitiesChange([...entities, { ...target, id: generateId(), p1, p2 }]);
+                 setEntities(prev => [...prev, { ...target, id: generateId(), p1, p2 }]);
               } else if (target.type === 'LINE') {
                  // Offset line by distance in its normal direction
                  const dx = target.end.x - target.start.x;
@@ -678,11 +680,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                     const nx = -dy / len;
                     const ny = dx / len;
                     // Determine which side clicked point is on
-                    const cross = (wPos.x - target.start.x) * dy - (wPos.y - target.start.y) * dx;
+                    const cross = (pt.x - target.start.x) * dy - (pt.y - target.start.y) * dx;
                     const dir = cross > 0 ? 1 : -1;
                     const start = { x: target.start.x + nx * dist * dir, y: target.start.y + ny * dist * dir };
                     const end = { x: target.end.x + nx * dist * dir, y: target.end.y + ny * dist * dir };
-                    onEntitiesChange([...entities, { ...target, id: generateId(), start, end }]);
+                    setEntities(prev => [...prev, { ...target, id: generateId(), start, end }]);
                  }
               }
            }
