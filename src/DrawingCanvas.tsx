@@ -651,7 +651,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
           return next;
         });
         onCommandComplete();
-      } else if (activeCommand === 'OFFSET' && commandStep === 1) {
+      }
+    } else if (activeCommand === 'OFFSET' && commandStep === 1) {
         if (typeof input !== 'object' || !('x' in input)) return;
         const pt = input as Point;
         const hitId = hitTest(pt);
