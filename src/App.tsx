@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy } from 'lucide-react';
+import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, FlipHorizontal, Layers } from 'lucide-react';
 import DrawingCanvas, { type DrawingCanvasHandle } from './DrawingCanvas';
 import './App.css';
 
@@ -216,6 +216,20 @@ function App() {
           </button>
           <button className={`ribbon-button ${activeCommand === 'TRIM' ? 'active' : ''}`} onClick={() => handleCommandClick('TRIM')}>
             <Scissors size={20} /><span>Trim</span>
+          </button>
+        </div>
+        <div className="ribbon-group">
+          <button className={`ribbon-button ${activeCommand === 'ROTATE' ? 'active' : ''}`} onClick={() => handleCommandClick('ROTATE')}>
+            <RotateCw size={20} /><span>Rotate</span>
+          </button>
+          <button className={`ribbon-button ${activeCommand === 'SCALE' ? 'active' : ''}`} onClick={() => handleCommandClick('SCALE')}>
+            <Maximize size={20} /><span>Scale</span>
+          </button>
+          <button className={`ribbon-button ${activeCommand === 'MIRROR' ? 'active' : ''}`} onClick={() => handleCommandClick('MIRROR')}>
+            <FlipHorizontal size={20} /><span>Mirror</span>
+          </button>
+          <button className={`ribbon-button ${activeCommand === 'OFFSET' ? 'active' : ''}`} onClick={() => handleCommandClick('OFFSET')}>
+            <Layers size={20} /><span>Offset</span>
           </button>
         </div>
         <div className="ribbon-group">
