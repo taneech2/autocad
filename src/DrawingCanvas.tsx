@@ -616,7 +616,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;
       const pt = sp ? sp.point : roundedPos;
       
-      if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') && commandStep === 0) {
+      if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'ARRAY') && commandStep === 0) {
          const hitId = hitTest(wPos);
          if (hitId) {
             setSelectedIds(prev => {
