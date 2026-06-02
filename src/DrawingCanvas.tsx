@@ -207,7 +207,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       const lastPoint = tempPoints.length > 0 ? tempPoints[tempPoints.length - 1] : undefined;
       const parsed = parseCoordinate(typedInput, lastPoint);
       
-      if (parsed !== null) {
+      if (activeCommand === 'TEXT' && commandStep === 2) {
+        handleCommandInput(typedInput);
+      } else if (parsed !== null) {
         handleCommandInput(parsed);
       } else {
         onPromptChange(`Invalid input: ${typedInput}`);
