@@ -299,24 +299,35 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         } else if (activeCommand === 'TRIM' || activeCommand === 'EXTEND') {
           onCommandComplete();
         }
+        const lastPoint = tempPoints.length > 0 ? tempPoints[tempPoints.length - 1] : {x:0, y:0};
+        const parsed = parseCoordinate(typedInputToProcess, lastPoint);
+        if (parsed) {
+          handleCommandInput(parsed);
+        } else {
+          handleCommandInput(typedInputToProcess);
+        }
         onInputProcessed();
         return;
       }
 
       const lastPoint = tempPoints.length > 0 ? tempPoints[tempPoints.length - 1] : undefined;
-      const parsed = parseCoordinate(typedInput, lastPoint);
+      const parsed = parseCoordinate(typedInputToProcess, lastPoint);
       
       if (activeCommand === 'TEXT' && commandStep === 2) {
-        handleCommandInput(typedInput);
+        handleCommandInput(typedInputToProcess);
       } else if (parsed !== null) {
         handleCommandInput(parsed);
       } else {
-        onPromptChange(`Invalid input: ${typedInput}`);
+        onPromptChange(`Invalid input: ${typedInputToProcess}`);
         setTimeout(() => setCommandStep(s => s), 2000);
       }
       onInputProcessed();
+    } else if (typedInputToProcess) {
+      onPromptChange(`Invalid input: ${typedInputToProcess}`);
+      onInputProcessed();
+      setTimeout(() => setCommandStep(s => s), 1500); // Trigger prompt refresh
     }
-  }, [typedInput]);
+  }, [typedInputToProcess]);
 
   // Find OSNAP
   const calculateSnap = (worldPos: Point) => {
@@ -734,7 +745,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       } else if (activeCommand === 'POLYGON' && commandStep === 2 && tempPoints.length > 0) {
         const center = tempPoints[0];
         const r = distance(center, cursorPos);
-        const sides = Number(typedInput) || 5; 
+        const sides = Number(typedInputToProcess) || 5; 
         drawEntity(ctx, { id: 'preview', type: 'POLYGON', center: center, radius: r, sides: sides }, false, true);
       } else if (commandStep === 2 && tempPoints.length > 0) {
          const origin = tempPoints[0];

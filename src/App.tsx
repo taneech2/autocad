@@ -590,7 +590,7 @@ function App() {
           <DrawingCanvas 
             ref={canvasRef}
             activeCommand={activeCommand} 
-            typedInput={typedInputToProcess}
+            typedInputToProcess={typedInputToProcess}
             onCommandComplete={handleCommandComplete} 
             onPromptChange={setPrompt}
             onInputProcessed={() => setTypedInputToProcess(null)}
