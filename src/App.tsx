@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, Layers, Monitor, Crop, Type, ChevronsRight, MoveHorizontal, Hexagon } from 'lucide-react';
+import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, Layers, Monitor, Crop, Type, ChevronsRight, MoveHorizontal, Hexagon, Bomb } from 'lucide-react';
 import DrawingCanvas, { type DrawingCanvasHandle } from './DrawingCanvas';
 import './App.css';
 
@@ -150,6 +150,7 @@ function App() {
         else if (input === 'EX' || input === 'EXTEND') handleCommandClick('EXTEND');
         else if (input === 'S' || input === 'STRETCH') handleCommandClick('STRETCH');
         else if (input === 'POL' || input === 'POLYGON') handleCommandClick('POLYGON');
+        else if (input === 'X' || input === 'EXPLODE') handleCommandClick('EXPLODE');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
         if (input === '') setTypedInputToProcess('ENTER_KEY');
@@ -248,6 +249,11 @@ function App() {
            passed = true;
         }
       }
+    } else if (currentLesson === 13) {
+      const rects = entities.filter(e => e.type === 'RECTANGLE');
+      const polygons = entities.filter(e => e.type === 'POLYGON');
+      const lines = entities.filter(e => e.type === 'LINE');
+      if (rects.length === 0 && polygons.length === 0 && lines.length >= 4) passed = true;
     }
 
     if (passed) {
@@ -255,7 +261,7 @@ function App() {
       setScore(prev => prev + points);
       setIsTimerRunning(false);
       alert(`ยอดเยี่ยม! ภารกิจสำเร็จ คุณได้รับ ${points} คะแนน (เหลือเวลา ${timeLeft} วินาที)`);
-      if (currentLesson < 12) setCurrentLesson(c => c + 1);
+      if (currentLesson < 13) setCurrentLesson(c => c + 1);
     } else {
       alert("ยังไม่ถูกต้อง ลองตรวจสอบพิกัดและวาดตามโจทย์ให้ครบถ้วนดูอีกครั้งนะครับ");
     }
@@ -333,6 +339,9 @@ function App() {
           <button className={`ribbon-button ${activeCommand === 'POLYGON' ? 'active' : ''}`} onClick={() => handleCommandClick('POLYGON')}>
             <Hexagon size={20} /><span>Polygon</span>
           </button>
+          <button className={`ribbon-button ${activeCommand === 'EXPLODE' ? 'active' : ''}`} onClick={() => handleCommandClick('EXPLODE')}>
+            <Bomb size={20} /><span>Explode</span>
+          </button>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', color: '#888', fontSize: '12px', paddingRight: '10px' }}>
           <span>สร้างโดยครูธานี ชมสุข</span>
@@ -357,15 +366,15 @@ function App() {
           <div className="sidebar-header">
             <button onClick={() => { setCurrentLesson(Math.max(1, currentLesson - 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
             <select 
+              className="difficulty-select" 
               value={currentLesson} 
               onChange={(e) => { setCurrentLesson(Number(e.target.value)); stopChallenge(); }}
-              style={{ background: '#252526', color: 'white', border: '1px solid #3e3e42', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', outline: 'none', flexGrow: 1, margin: '0 10px', textAlign: 'center' }}
             >
-              {[...Array(12)].map((_, i) => (
-                <option key={i+1} value={i+1}>บทเรียนที่ {i+1}</option>
+              {[...Array(13)].map((_, i) => (
+                <option key={i} value={i + 1}>บทที่ {i + 1}</option>
               ))}
             </select>
-            <button onClick={() => { setCurrentLesson(Math.min(11, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            <button onClick={() => { setCurrentLesson(Math.min(13, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
           <div className="sidebar-content">
@@ -549,6 +558,19 @@ function App() {
                   <li>พิมพ์จำนวนด้าน <code>{lessonParams.l12_sides}</code> กด Enter</li>
                   <li>พิมพ์พิกัดจุดศูนย์กลาง <code>{lessonParams.l12_centerX},{lessonParams.l12_centerY}</code> กด Enter</li>
                   <li>พิมพ์รัศมีวงกลม <code>{lessonParams.l12_radius}</code> กด Enter</li>
+                </ol>
+              </>
+            )}
+
+            {currentLesson === 13 && (
+              <>
+                <h3>บทที่ 13: ระเบิดวัตถุ (EXPLODE)</h3>
+                <p>คำสั่ง <strong>EXPLODE (X)</strong> ใช้สำหรับระเบิดรูปหลายเหลี่ยม (เช่น สี่เหลี่ยม, รูปหลายเหลี่ยม) ให้กลายเป็นเส้นตรงหลายๆ เส้น</p>
+                <ol>
+                  <li>วาดรูป <strong>สี่เหลี่ยม (REC)</strong> หรือ <strong>รูปหลายเหลี่ยม (POL)</strong> ขึ้นมา 1 รูปตรงไหนก็ได้</li>
+                  <li>พิมพ์ <code>X</code> หรือ <code>EXPLODE</code> แล้วกด Enter</li>
+                  <li>คลิกเลือกรูปทรงที่วาด</li>
+                  <li>กด <strong>Enter</strong> เพื่อระเบิดรูปทรงให้กลายเป็นเส้นตรง!</li>
                 </ol>
               </>
             )}

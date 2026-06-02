@@ -215,7 +215,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       else if (commandStep === 2) onPromptChange(`${activeCommand} Specify second point of displacement:`);
     } else if (activeCommand === 'TRIM') {
       onPromptChange('TRIM Select object to trim (Line only):');
-    } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') {
+    } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'EXPLODE') {
       if (commandStep === 0) onPromptChange(`${activeCommand} Select objects: (${selectedIds.size} found) [Press Enter to continue]`);
       else if (commandStep === 1) onPromptChange(`${activeCommand} Specify first point of mirror line / base point:`);
       else if (commandStep === 2) onPromptChange(`${activeCommand} Specify second point / factor / angle:`);
@@ -880,7 +880,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;
       const pt = sp ? sp.point : roundedPos;
       
-      if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'ARRAY') && commandStep === 0) {
+      if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'ARRAY' || activeCommand === 'EXPLODE') && commandStep === 0) {
          const hitId = hitTest(wPos);
          if (hitId) {
             setSelectedIds(prev => {
@@ -1467,6 +1467,38 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       } else if (e.key === 'Enter') {
          if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') && commandStep === 0) {
            if (selectedIds.size > 0) setCommandStep(1);
+         } else if (activeCommand === 'EXPLODE' && commandStep === 0) {
+           if (selectedIds.size > 0) {
+             setEntities(prev => {
+               const next = [...prev];
+               selectedIds.forEach(id => {
+                 const idx = next.findIndex(e => e.id === id);
+                 if (idx >= 0) {
+                   const e = next[idx];
+                   if (e.type === 'RECTANGLE') {
+                     next.splice(idx, 1);
+                     next.push({ id: generateId(), type: 'LINE', start: e.p1, end: { x: e.p2.x, y: e.p1.y } });
+                     next.push({ id: generateId(), type: 'LINE', start: { x: e.p2.x, y: e.p1.y }, end: e.p2 });
+                     next.push({ id: generateId(), type: 'LINE', start: e.p2, end: { x: e.p1.x, y: e.p2.y } });
+                     next.push({ id: generateId(), type: 'LINE', start: { x: e.p1.x, y: e.p2.y }, end: e.p1 });
+                   } else if (e.type === 'POLYGON') {
+                     next.splice(idx, 1);
+                     for (let i = 0; i < e.sides; i++) {
+                       const a1 = -Math.PI / 2 + i * (2 * Math.PI / e.sides);
+                       const a2 = -Math.PI / 2 + (i + 1) * (2 * Math.PI / e.sides);
+                       next.push({ 
+                         id: generateId(), type: 'LINE', 
+                         start: { x: e.center.x + e.radius * Math.cos(a1), y: e.center.y + e.radius * Math.sin(a1) },
+                         end: { x: e.center.x + e.radius * Math.cos(a2), y: e.center.y + e.radius * Math.sin(a2) }
+                       });
+                     }
+                   }
+                 }
+               });
+               return next;
+             });
+             onCommandComplete();
+           }
          } else if (activeCommand === 'LINE' && commandStep === 1) {
            onCommandComplete();
          }
