@@ -8,6 +8,8 @@ export const parseCoordinate = (input: string, lastPoint?: Point): Point | numbe
   // Check for specific sub-commands
   if (cleanInput === 'U' || cleanInput === 'UNDO') return 'UNDO';
   if (cleanInput === 'C' || cleanInput === 'CLOSE') return 'CLOSE';
+  if (cleanInput === 'R' || cleanInput === 'RECTANGULAR') return 'R';
+  if (cleanInput === 'P' || cleanInput === 'POLAR') return 'P';
 
   // Match Absolute: 5,5
   const absoluteMatch = cleanInput.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
