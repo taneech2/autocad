@@ -272,6 +272,9 @@ function App() {
             <MousePointer2 size={20} /><span>Pan</span>
           </button>
         </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', color: '#888', fontSize: '12px', paddingRight: '10px' }}>
+          <span>สร้างโดยครูธานี ชมสุข</span>
+        </div>
       </header>
 
       <div className="dashboard">
