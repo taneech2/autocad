@@ -474,6 +474,40 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
       drawGrid(ctx);
 
+      // Draw UCS Icon (XY indicator)
+      function drawUCS(ctx: CanvasRenderingContext2D) {
+        ctx.save();
+        ctx.lineWidth = 1 / zoom;
+        
+        // X axis
+        ctx.strokeStyle = '#ff4444';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(3, 0);
+        ctx.stroke();
+        
+        // Y axis
+        ctx.strokeStyle = '#44ff44';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, 3);
+        ctx.stroke();
+
+        // Origin box
+        ctx.strokeStyle = '#ffffff';
+        ctx.strokeRect(-0.2, -0.2, 0.4, 0.4);
+
+        // Text
+        ctx.scale(1, -1);
+        ctx.font = `0.8px Consolas`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('X', 3.2, 0.3);
+        ctx.fillText('Y', 0.3, -3.2);
+
+        ctx.restore();
+      }
+      drawUCS(ctx);
+
       entities.forEach(entity => {
         drawEntity(ctx, entity, selectedIds.has(entity.id));
       });
