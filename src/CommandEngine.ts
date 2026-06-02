@@ -1,6 +1,6 @@
 import type { Point } from './DrawingCanvas';
 
-export type CommandType = 'LINE' | 'CIRCLE' | 'RECTANGLE' | 'MOVE' | 'COPY' | 'TRIM' | 'ROTATE' | 'SCALE' | 'MIRROR' | 'OFFSET' | 'PAN' | 'FILLET' | 'CHAMFER' | null;
+export type CommandType = 'LINE' | 'CIRCLE' | 'RECTANGLE' | 'MOVE' | 'COPY' | 'TRIM' | 'ROTATE' | 'SCALE' | 'MIRROR' | 'OFFSET' | 'PAN' | 'FILLET' | 'CHAMFER' | 'ARRAY' | null;
 
 export const parseCoordinate = (input: string, lastPoint?: Point): Point | number | string | null => {
   const cleanInput = input.trim().toUpperCase();

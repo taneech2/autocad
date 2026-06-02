@@ -15,6 +15,7 @@ interface LessonParams {
   l6_x: number; l6_y: number; l6_len: number; l6_ang: number;
   l7_cx: number; l7_cy: number; l7_r: number; l7_dist: number;
   l8_rectX: number; l8_rectY: number; l8_rectW: number; l8_rectH: number; l8_radius: number;
+  l9_circX: number; l9_circY: number; l9_circR: number; l9_cols: number; l9_rows: number; l9_dist: number;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -28,7 +29,8 @@ const generateRandomParams = (): LessonParams => {
     l5_cx: randInt(-2, 2), l5_cy: randInt(-2, 2), l5_len: randInt(4, 6),
     l6_x: randInt(-3, 3), l6_y: randInt(-3, 3), l6_len: randInt(3, 6), l6_ang: [90, -90, 45, -45][randInt(0, 3)],
     l7_cx: randInt(-5, 5), l7_cy: randInt(-5, 5), l7_r: randInt(2, 4), l7_dist: randInt(1, 3),
-    l8_rectX: randInt(-5, -2), l8_rectY: randInt(-5, -2), l8_rectW: randInt(5, 8), l8_rectH: randInt(5, 8), l8_radius: randInt(1, 2)
+    l8_rectX: randInt(-5, -2), l8_rectY: randInt(-5, -2), l8_rectW: randInt(5, 8), l8_rectH: randInt(5, 8), l8_radius: randInt(1, 2),
+    l9_circX: randInt(-8, -4), l9_circY: randInt(-8, -4), l9_circR: randInt(1, 2), l9_cols: randInt(2, 4), l9_rows: randInt(2, 4), l9_dist: randInt(3, 5)
   };
 };
 
@@ -105,6 +107,7 @@ function App() {
         else if (input === 'O' || input === 'OFFSET') handleCommandClick('OFFSET');
         else if (input === 'F' || input === 'FILLET') handleCommandClick('FILLET');
         else if (input === 'CHA' || input === 'CHAMFER') handleCommandClick('CHAMFER');
+        else if (input === 'AR' || input === 'ARRAY') handleCommandClick('ARRAY');
         else if (input === 'P' || input === 'PAN') handleCommandClick('PAN');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
@@ -184,6 +187,9 @@ function App() {
          const r = rects[0];
          if (r.filletRadius && Math.abs(r.filletRadius - lessonParams.l8_radius) < 0.1) passed = true;
       }
+    } else if (currentLesson === 9) {
+      const circles = entities.filter(e => e.type === 'CIRCLE') as any[];
+      if (circles.length >= lessonParams.l9_cols * lessonParams.l9_rows) passed = true;
     }
 
     if (passed) {
@@ -191,6 +197,7 @@ function App() {
       setScore(prev => prev + points);
       setIsTimerRunning(false);
       alert(`ยอดเยี่ยม! ภารกิจสำเร็จ คุณได้รับ ${points} คะแนน (เหลือเวลา ${timeLeft} วินาที)`);
+      if (currentLesson < 9) setCurrentLesson(c => c + 1);
     } else {
       alert("ยังไม่ถูกต้อง ลองตรวจสอบพิกัดและวาดตามโจทย์ให้ครบถ้วนดูอีกครั้งนะครับ");
     }
@@ -234,6 +241,9 @@ function App() {
           <button className={`ribbon-button ${activeCommand === 'CHAMFER' ? 'active' : ''}`} onClick={() => handleCommandClick('CHAMFER')}>
             <Square size={20} /><span>Chamfer</span>
           </button>
+          <button className={`ribbon-button ${activeCommand === 'ARRAY' ? 'active' : ''}`} onClick={() => handleCommandClick('ARRAY')}>
+            <Copy size={20} /><span>Array</span>
+          </button>
         </div>
         <div className="ribbon-group">
           <button className={`ribbon-button ${activeCommand === 'ROTATE' ? 'active' : ''}`} onClick={() => handleCommandClick('ROTATE')}>
@@ -265,8 +275,8 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <button onClick={() => { setCurrentLesson(Math.max(1, currentLesson - 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
-            <span>บทเรียน (Lesson {currentLesson}/8)</span>
-            <button onClick={() => { setCurrentLesson(Math.min(8, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            <span>บทเรียน (Lesson {currentLesson}/9)</span>
+            <button onClick={() => { setCurrentLesson(Math.min(9, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
           <div className="sidebar-content">
@@ -392,6 +402,21 @@ function App() {
                   <li>พิมพ์ <code>F</code> (FILLET) หรือคลิกปุ่ม Fillet</li>
                   <li>ระบบจะถามระยะ รัศมี (Radius) ให้พิมพ์ <code>{lessonParams.l8_radius}</code> แล้วกด Enter</li>
                   <li>นำเมาส์ไปคลิกที่เส้นขอบของสี่เหลี่ยม เพื่อลบมุมโค้งทุกมุมพร้อมกัน!</li>
+                </ol>
+              </>
+            )}
+
+            {currentLesson === 9 && (
+              <>
+                <h3>บทที่ 9: การคัดลอกแบบจัดเรียง (ARRAY)</h3>
+                <p>สร้างสำเนาวัตถุจำนวนมากอย่างเป็นระเบียบด้วย <strong>ARRAY</strong></p>
+                <ol>
+                  <li>พิมพ์ <code>C</code> สร้างวงกลมที่ <code>{lessonParams.l9_circX},{lessonParams.l9_circY}</code> รัศมี <code>{lessonParams.l9_circR}</code></li>
+                  <li>พิมพ์ <code>AR</code> (ARRAY) แล้วคลิกเลือกวงกลม กด Enter</li>
+                  <li>พิมพ์ <code>R</code> เพื่อเลือกแบบ Rectangular (ตาราง) กด Enter</li>
+                  <li>พิมพ์จำนวนคอลัมน์ <code>{lessonParams.l9_cols}</code> และ จำนวนแถว <code>{lessonParams.l9_rows}</code></li>
+                  <li>พิมพ์ระยะห่างคอลัมน์และแถว อย่างละ <code>{lessonParams.l9_dist}</code> กด Enter</li>
+                  <li>ระบบจะสร้างวงกลมทั้งหมด {lessonParams.l9_cols * lessonParams.l9_rows} วงเรียงกัน!</li>
                 </ol>
               </>
             )}

@@ -169,6 +169,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       if (commandStep === 0) onPromptChange(`CHAMFER Specify chamfer distance:`);
       else if (commandStep === 1) onPromptChange(`CHAMFER Select first object (Rectangle or Line):`);
       else if (commandStep === 2) onPromptChange(`CHAMFER Select second line:`);
+    } else if (activeCommand === 'ARRAY') {
+      if (commandStep === 0) onPromptChange(`ARRAY Select objects: (${selectedIds.size} found) [Press Enter to continue]`);
+      else if (commandStep === 1) onPromptChange(`ARRAY Enter Array type [Rectangular(R) / Polar(P)]:`);
+      else if (commandStep === 2) onPromptChange(tempPoints[0]?.x === 0 ? `ARRAY Enter number of columns:` : `ARRAY Specify center point of polar array:`);
+      else if (commandStep === 3) onPromptChange(tempPoints[0]?.x === 0 ? `ARRAY Enter number of rows:` : `ARRAY Enter number of items:`);
+      else if (commandStep === 4) onPromptChange(tempPoints[0]?.x === 0 ? `ARRAY Enter distance between columns:` : `ARRAY Enter angle to fill (e.g. 360):`);
+      else if (commandStep === 5) onPromptChange(`ARRAY Enter distance between rows:`);
     }
   }, [activeCommand, commandStep, selectedIds.size, onPromptChange]);
 
@@ -176,7 +183,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   useEffect(() => {
     if (typedInput && activeCommand) {
       if (typedInput === 'ENTER_KEY') {
-        if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') && commandStep === 0) {
+        if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'ARRAY') && commandStep === 0) {
           if (selectedIds.size > 0) setCommandStep(1);
         } else if (activeCommand === 'LINE' && commandStep === 1) {
           onCommandComplete();
@@ -982,6 +989,87 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                 setSelectedIds(new Set());
                 onCommandComplete();
             }
+        }
+    } else if (activeCommand === 'ARRAY') {
+        if (commandStep === 1 && typeof input === 'string') {
+            const t = input.trim().toUpperCase();
+            if (t === 'R' || t === 'RECTANGULAR') {
+                setTempPoints([{ x: 0, y: 0 }]); // 0 means Rectangular
+                setCommandStep(2);
+            } else if (t === 'P' || t === 'POLAR') {
+                setTempPoints([{ x: 1, y: 0 }]); // 1 means Polar
+                setCommandStep(2);
+            }
+        } else if (commandStep === 2) {
+            const isPolar = tempPoints[0].x === 1;
+            if (isPolar && typeof input === 'object' && 'x' in input) {
+                setTempPoints(prev => [...prev, input]); // prev[1] is center
+                setCommandStep(3);
+            } else if (!isPolar && typeof input === 'number') {
+                setTempPoints(prev => [{ ...prev[0], y: input }]); // y is cols
+                setCommandStep(3);
+            }
+        } else if (commandStep === 3 && typeof input === 'number') {
+            const isPolar = tempPoints[0].x === 1;
+            if (isPolar) {
+                setTempPoints(prev => [...prev, { x: input, y: 0 }]); // prev[2].x is items
+                setCommandStep(4);
+            } else {
+                setTempPoints(prev => [...prev, { x: input, y: 0 }]); // prev[1].x is rows
+                setCommandStep(4);
+            }
+        } else if (commandStep === 4 && typeof input === 'number') {
+            const isPolar = tempPoints[0].x === 1;
+            if (isPolar) {
+                const center = tempPoints[1];
+                const items = tempPoints[2].x;
+                const angleFill = input;
+                const angleStep = items > 1 ? angleFill / items : 0;
+                
+                setEntities(prev => {
+                    const next = [...prev];
+                    const selected = Array.from(selectedIds).map(id => prev.find(e => e.id === id)).filter(Boolean) as Entity[];
+                    for (let i = 1; i < items; i++) {
+                        const ang = i * angleStep;
+                        selected.forEach(e => {
+                            if (e.type === 'LINE') next.push({ ...e, id: generateId(), start: rotatePoint(e.start, center, ang), end: rotatePoint(e.end, center, ang) });
+                            else if (e.type === 'CIRCLE') next.push({ ...e, id: generateId(), center: rotatePoint(e.center, center, ang) });
+                            else if (e.type === 'RECTANGLE') next.push({ ...e, id: generateId(), type: 'LINE', start: rotatePoint(e.p1, center, ang), end: rotatePoint(e.p2, center, ang) });
+                            else if (e.type === 'ARC') next.push({ ...e, id: generateId(), start: rotatePoint(e.start, center, ang), control: rotatePoint(e.control, center, ang), end: rotatePoint(e.end, center, ang) });
+                        });
+                    }
+                    return next;
+                });
+                onCommandComplete();
+            } else {
+                setTempPoints(prev => [{ ...prev[0] }, { ...prev[1], y: input }]); // prev[1].y is colSpacing
+                setCommandStep(5);
+            }
+        } else if (commandStep === 5 && typeof input === 'number') {
+            const cols = tempPoints[0].y;
+            const rows = tempPoints[1].x;
+            const colSpacing = tempPoints[1].y;
+            const rowSpacing = input;
+            
+            setEntities(prev => {
+                const next = [...prev];
+                const selected = Array.from(selectedIds).map(id => prev.find(e => e.id === id)).filter(Boolean) as Entity[];
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        if (r === 0 && c === 0) continue; // Original is already there
+                        const dx = c * colSpacing;
+                        const dy = r * rowSpacing;
+                        selected.forEach(e => {
+                            if (e.type === 'LINE') next.push({ ...e, id: generateId(), start: {x: e.start.x + dx, y: e.start.y + dy}, end: {x: e.end.x + dx, y: e.end.y + dy} });
+                            else if (e.type === 'CIRCLE') next.push({ ...e, id: generateId(), center: {x: e.center.x + dx, y: e.center.y + dy} });
+                            else if (e.type === 'RECTANGLE') next.push({ ...e, id: generateId(), p1: {x: e.p1.x + dx, y: e.p1.y + dy}, p2: {x: e.p2.x + dx, y: e.p2.y + dy} });
+                            else if (e.type === 'ARC') next.push({ ...e, id: generateId(), start: {x: e.start.x + dx, y: e.start.y + dy}, control: {x: e.control.x + dx, y: e.control.y + dy}, end: {x: e.end.x + dx, y: e.end.y + dy} });
+                        });
+                    }
+                }
+                return next;
+            });
+            onCommandComplete();
         }
     }
   };
