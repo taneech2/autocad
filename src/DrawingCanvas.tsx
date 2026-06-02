@@ -11,7 +11,8 @@ export interface Arc extends BaseEntity { type: 'ARC'; start: Point; control: Po
 export interface Text extends BaseEntity { type: 'TEXT'; start: Point; text: string; height: number; }
 export interface Dimension extends BaseEntity { type: 'DIMENSION'; p1: Point; p2: Point; dimLinePos: Point; text: string; }
 export interface Polygon extends BaseEntity { type: 'POLYGON'; center: Point; radius: number; sides: number; }
-export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension | Polygon;
+export interface CircularArc extends BaseEntity { type: 'CIRCULAR_ARC'; center: Point; radius: number; startAngle: number; endAngle: number; }
+export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension | Polygon | CircularArc;
 
 interface DrawingCanvasProps {
   activeCommand: string | null;
@@ -35,6 +36,27 @@ const distanceToLineSegment = (p: Point, v: Point, w: Point) => {
   let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
   t = Math.max(0, Math.min(1, t));
   return distance(p, { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) });
+};
+
+const getCircleLineIntersections = (center: Point, r: number, p1: Point, p2: Point): Point[] => {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const a = dx*dx + dy*dy;
+  const b = 2 * (dx*(p1.x - center.x) + dy*(p1.y - center.y));
+  const c = (p1.x - center.x)**2 + (p1.y - center.y)**2 - r*r;
+  const det = b*b - 4*a*c;
+  if (det < 0) return [];
+  if (det === 0) {
+    const t = -b / (2*a);
+    if (t >= 0 && t <= 1) return [{x: p1.x + t*dx, y: p1.y + t*dy}];
+    return [];
+  }
+  const t1 = (-b + Math.sqrt(det)) / (2*a);
+  const t2 = (-b - Math.sqrt(det)) / (2*a);
+  const pts = [];
+  if (t1 >= 0 && t1 <= 1) pts.push({x: p1.x + t1*dx, y: p1.y + t1*dy});
+  if (t2 >= 0 && t2 <= 1) pts.push({x: p1.x + t2*dx, y: p1.y + t2*dy});
+  return pts;
 };
 
 const getLineSegmentIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
@@ -358,6 +380,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       } else if (entity.type === 'CIRCLE') {
         const d = distance(worldPos, entity.center);
         if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
+      } else if (entity.type === 'CIRCULAR_ARC') {
+        const d = distance(worldPos, entity.center);
+        if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
       } else if (entity.type === 'POLYGON') {
         const d = distance(worldPos, entity.center);
         if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
@@ -380,8 +405,18 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         const d = distanceToLineSegment(worldPos, entity.start, entity.end);
         if (d < minDist) { minDist = d; bestEntityId = entity.id; }
       } else if (entity.type === 'CIRCLE') {
-        const d = distance(worldPos, entity.center);
-        if (d <= entity.radius + pickDistance) { minDist = 0; bestEntityId = entity.id; }
+        const d = Math.abs(distance(worldPos, entity.center) - entity.radius);
+        if (d <= pickDistance && d < minDist) { minDist = d; bestEntityId = entity.id; }
+      } else if (entity.type === 'CIRCULAR_ARC') {
+        const d = Math.abs(distance(worldPos, entity.center) - entity.radius);
+        if (d <= pickDistance && d < minDist) {
+          let ang = Math.atan2(worldPos.y - entity.center.y, worldPos.x - entity.center.x);
+          if (ang < 0) ang += 2*Math.PI;
+          let sa = entity.startAngle < 0 ? entity.startAngle + 2*Math.PI : entity.startAngle;
+          let ea = entity.endAngle < 0 ? entity.endAngle + 2*Math.PI : entity.endAngle;
+          let inArc = ea < sa ? (ang >= sa || ang <= ea) : (ang >= sa && ang <= ea);
+          if (inArc) { minDist = d; bestEntityId = entity.id; }
+        }
       } else if (entity.type === 'POLYGON') {
         const d = distance(worldPos, entity.center);
         if (d <= entity.radius + pickDistance) { minDist = 0; bestEntityId = entity.id; }
@@ -409,22 +444,66 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         {p1: {x: p2.x, y: p1.y}, p2: p1}
       ];
     }
+    if (entity.type === 'POLYGON') {
+      const pts = [];
+      const angleStep = (Math.PI * 2) / entity.sides;
+      let startAngle = -Math.PI / 2;
+      for (let i = 0; i < entity.sides; i++) {
+        pts.push({
+          x: entity.center.x + entity.radius * Math.cos(startAngle + i * angleStep),
+          y: entity.center.y + entity.radius * Math.sin(startAngle + i * angleStep)
+        });
+      }
+      const segs = [];
+      for (let i = 0; i < pts.length; i++) {
+        segs.push({p1: pts[i], p2: pts[(i + 1) % pts.length]});
+      }
+      return segs;
+    }
     return [];
   };
 
   const executeTrim = (targetId: string, clickPos: Point) => {
     const targetEntity = entities.find(e => e.id === targetId);
-    if (!targetEntity || targetEntity.type !== 'LINE') return; // Only support trimming lines for now
+    if (!targetEntity) return;
+
+    if (targetEntity.type !== 'LINE' && targetEntity.type !== 'CIRCLE' && targetEntity.type !== 'CIRCULAR_ARC') {
+       // Just delete if unsupported for trim but clicked
+       setEntities(prev => prev.filter(e => e.id !== targetId));
+       return;
+    }
 
     // Find all intersections
     const intersections: Point[] = [];
     entities.forEach(other => {
       if (other.id === targetId) return;
-      const segments = getEntitySegments(other);
-      segments.forEach(seg => {
-        const pt = getLineSegmentIntersection(targetEntity.start, targetEntity.end, seg.p1, seg.p2);
-        if (pt) intersections.push(pt);
-      });
+      const segmentsOther = getEntitySegments(other);
+      
+      if (targetEntity.type === 'LINE') {
+        segmentsOther.forEach(seg => {
+          const pt = getLineSegmentIntersection(targetEntity.start, targetEntity.end, seg.p1, seg.p2);
+          if (pt) intersections.push(pt);
+        });
+        if (other.type === 'CIRCLE' || other.type === 'CIRCULAR_ARC') {
+          let pts = getCircleLineIntersections(other.center, (other as any).radius, targetEntity.start, targetEntity.end);
+          if (other.type === 'CIRCULAR_ARC') {
+             pts = pts.filter(pt => {
+                let ang = Math.atan2(pt.y - (other as any).center.y, pt.x - (other as any).center.x);
+                if (ang < 0) ang += 2*Math.PI;
+                let sa = (other as any).startAngle < 0 ? (other as any).startAngle + 2*Math.PI : (other as any).startAngle;
+                let ea = (other as any).endAngle < 0 ? (other as any).endAngle + 2*Math.PI : (other as any).endAngle;
+                if (ea < sa) return ang >= sa || ang <= ea;
+                return ang >= sa && ang <= ea;
+             });
+          }
+          intersections.push(...pts);
+        }
+      } else if (targetEntity.type === 'CIRCLE' || targetEntity.type === 'CIRCULAR_ARC') {
+        segmentsOther.forEach(seg => {
+          let pts = getCircleLineIntersections((targetEntity as any).center, (targetEntity as any).radius, seg.p1, seg.p2);
+          intersections.push(...pts);
+        });
+      }
     });
 
     // Remove duplicate intersections
@@ -432,37 +511,95 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       index === self.findIndex((t) => (Math.abs(t.x - pt.x) < 1e-4 && Math.abs(t.y - pt.y) < 1e-4))
     );
 
-    // Build points array starting from line start to line end
-    let pts = [targetEntity.start, ...uniqueIntersections, targetEntity.end];
-    pts.sort((a, b) => distance(targetEntity.start, a) - distance(targetEntity.start, b));
+    if (uniqueIntersections.length === 0) {
+      setEntities(prev => prev.filter(e => e.id !== targetId));
+      return;
+    }
 
-    // Find which segment was clicked
-    let clickedIndex = -1;
-    let minDist = Infinity;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const d = distanceToLineSegment(clickPos, pts[i], pts[i+1]);
-      if (d < minDist) {
-        minDist = d;
-        clickedIndex = i;
+    if (targetEntity.type === 'LINE') {
+      let pts = [targetEntity.start, ...uniqueIntersections, targetEntity.end];
+      pts.sort((a, b) => distance(targetEntity.start, a) - distance(targetEntity.start, b));
+  
+      let clickedIndex = -1;
+      let minDist = Infinity;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const d = distanceToLineSegment(clickPos, pts[i], pts[i+1]);
+        if (d < minDist) {
+          minDist = d;
+          clickedIndex = i;
+        }
+      }
+  
+      if (clickedIndex >= 0) {
+        setEntities(prev => {
+          const next = prev.filter(e => e.id !== targetId);
+          if (clickedIndex > 0 && distance(pts[0], pts[clickedIndex]) > 1e-4) {
+            next.push({ id: generateId(), type: 'LINE', start: pts[0], end: pts[clickedIndex] });
+          }
+          if (clickedIndex < pts.length - 2 && distance(pts[clickedIndex + 1], pts[pts.length - 1]) > 1e-4) {
+            next.push({ id: generateId(), type: 'LINE', start: pts[clickedIndex + 1], end: pts[pts.length - 1] });
+          }
+          return next;
+        });
+      }
+    } else if (targetEntity.type === 'CIRCLE' || targetEntity.type === 'CIRCULAR_ARC') {
+      let angles = uniqueIntersections.map(pt => Math.atan2(pt.y - (targetEntity as any).center.y, pt.x - (targetEntity as any).center.x));
+      if (targetEntity.type === 'CIRCULAR_ARC') {
+        angles.push((targetEntity as any).startAngle, (targetEntity as any).endAngle);
+      }
+      angles = angles.map(a => a < 0 ? a + 2*Math.PI : a);
+      angles.sort((a, b) => a - b);
+      angles = angles.filter((a, index, self) => index === self.findIndex(t => Math.abs(t - a) < 1e-4));
+      
+      let clickAngle = Math.atan2(clickPos.y - (targetEntity as any).center.y, clickPos.x - (targetEntity as any).center.x);
+      if (clickAngle < 0) clickAngle += 2*Math.PI;
+      
+      let clickedIndex = -1;
+      for (let i = 0; i < angles.length; i++) {
+        const nextAngle = i === angles.length - 1 ? angles[0] + 2*Math.PI : angles[i+1];
+        let ca = clickAngle;
+        if (i === angles.length - 1 && ca < angles[i]) ca += 2*Math.PI;
+        
+        if (ca >= angles[i] && ca <= nextAngle) {
+          clickedIndex = i;
+          break;
+        }
+      }
+      
+      if (clickedIndex >= 0) {
+        setEntities(prev => {
+           const next = prev.filter(e => e.id !== targetId);
+           if (targetEntity.type === 'CIRCLE') {
+             if (angles.length === 1) return prev; // Cannot trim circle with 1 point
+             let startAngle = clickedIndex === angles.length - 1 ? angles[0] : angles[clickedIndex + 1];
+             let endAngle = angles[clickedIndex];
+             next.push({ id: generateId(), type: 'CIRCULAR_ARC', center: (targetEntity as any).center, radius: (targetEntity as any).radius, startAngle, endAngle });
+           } else if (targetEntity.type === 'CIRCULAR_ARC') {
+             for (let i = 0; i < angles.length; i++) {
+               if (i === clickedIndex) continue;
+               const nextI = i === angles.length - 1 ? 0 : i + 1;
+               let sa = angles[i];
+               let ea = angles[nextI];
+               
+               let midAngle = sa + (ea < sa ? ea + 2*Math.PI - sa : ea - sa) / 2;
+               if (midAngle > 2*Math.PI) midAngle -= 2*Math.PI;
+               
+               let origSA = (targetEntity as any).startAngle < 0 ? (targetEntity as any).startAngle + 2*Math.PI : (targetEntity as any).startAngle;
+               let origEA = (targetEntity as any).endAngle < 0 ? (targetEntity as any).endAngle + 2*Math.PI : (targetEntity as any).endAngle;
+               let inOriginal = origEA < origSA ? (midAngle >= origSA || midAngle <= origEA) : (midAngle >= origSA && midAngle <= origEA);
+               
+               if (inOriginal) {
+                  next.push({ id: generateId(), type: 'CIRCULAR_ARC', center: (targetEntity as any).center, radius: (targetEntity as any).radius, startAngle: sa, endAngle: ea });
+               }
+             }
+           }
+           return next;
+        });
       }
     }
-
-    if (clickedIndex >= 0) {
-      setEntities(prev => {
-        const next = prev.filter(e => e.id !== targetId); // remove original
-        // Add all segments except the clicked one
-        for (let i = 0; i < pts.length - 1; i++) {
-          if (i !== clickedIndex) {
-            // Only add if segment has length
-            if (distance(pts[i], pts[i+1]) > 1e-4) {
-              next.push({ id: generateId(), type: 'LINE', start: pts[i], end: pts[i+1] });
-            }
-          }
-        }
-        return next;
-      });
-    }
   };
+
+
 
   const executeExtend = (targetId: string, clickPos: Point) => {
     const targetEntity = entities.find(e => e.id === targetId);
@@ -599,6 +736,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       } else if (entity.type === 'CIRCLE') {
         ctx.beginPath();
         ctx.arc(entity.center.x, entity.center.y, entity.radius, 0, 2 * Math.PI);
+        ctx.stroke();
+      } else if (entity.type === 'CIRCULAR_ARC') {
+        ctx.beginPath();
+        ctx.arc(entity.center.x, entity.center.y, entity.radius, entity.startAngle, entity.endAngle);
         ctx.stroke();
       } else if (entity.type === 'POLYGON') {
         const angleStep = (Math.PI * 2) / entity.sides;
