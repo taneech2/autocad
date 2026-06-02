@@ -233,14 +233,15 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         const d = distanceToLineSegment(worldPos, entity.start, entity.end);
         if (d < minDist) { minDist = d; bestEntityId = entity.id; }
       } else if (entity.type === 'CIRCLE') {
-        const d = Math.abs(distance(worldPos, entity.center) - entity.radius);
-        if (d < minDist) { minDist = d; bestEntityId = entity.id; }
+        const d = distance(worldPos, entity.center);
+        if (d <= entity.radius + pickDistance) { minDist = 0; bestEntityId = entity.id; }
       } else if (entity.type === 'RECTANGLE') {
-        const { p1, p2 } = entity;
-        const pts = [p1, {x: p1.x, y: p2.y}, p2, {x: p2.x, y: p1.y}, p1];
-        for (let i=0; i<4; i++) {
-          const d = distanceToLineSegment(worldPos, pts[i], pts[i+1]);
-          if (d < minDist) { minDist = d; bestEntityId = entity.id; }
+        const minX = Math.min(entity.p1.x, entity.p2.x) - pickDistance;
+        const maxX = Math.max(entity.p1.x, entity.p2.x) + pickDistance;
+        const minY = Math.min(entity.p1.y, entity.p2.y) - pickDistance;
+        const maxY = Math.max(entity.p1.y, entity.p2.y) + pickDistance;
+        if (worldPos.x >= minX && worldPos.x <= maxX && worldPos.y >= minY && worldPos.y <= maxY) {
+          minDist = 0; bestEntityId = entity.id;
         }
       }
     });
