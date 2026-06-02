@@ -1061,6 +1061,30 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
        }
        return;
     }
+
+    if (activeCommand === 'POLYGON') {
+       if (commandStep === 0) {
+          const s = Number(input);
+          if (!isNaN(s) && s >= 3) {
+             setTypedInputToProcess(s as any);
+             setCommandStep(1);
+          } else {
+             onPromptChange('POLYGON Requires an integer between 3 and 1024');
+             setTimeout(() => setCommandStep(s => s), 2000);
+          }
+       } else if (commandStep === 1) {
+          setTempPoints([typeof input === 'object' ? input as Point : {x:0, y:0}]);
+          setCommandStep(2);
+       } else if (commandStep === 2) {
+          const center = tempPoints[0];
+          const r = typeof input === 'number' ? input : distance(center, input as Point);
+          const sides = typeof typedInputToProcess === 'number' ? typedInputToProcess : Number(typedInputToProcess) || 5;
+          setEntities(prev => [...prev, { id: generateId(), type: 'POLYGON', center: center, radius: r, sides: sides }]);
+          onCommandComplete();
+       }
+       return;
+    }
+
     if (activeCommand === 'LINE') {
       if (input === 'UNDO' && tempPoints.length > 0) {
         setEntities(prev => {
