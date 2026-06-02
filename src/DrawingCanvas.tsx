@@ -22,6 +22,7 @@ interface DrawingCanvasProps {
 
 export interface DrawingCanvasHandle {
   getEntities: () => Entity[];
+  undo: () => void;
 }
 
 // Math utils
@@ -112,8 +113,19 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   const [lastMousePos, setLastMousePos] = useState<Point>({ x: 0, y: 0 });
 
   // Drawing state
-  const [entities, setEntities] = useState<Entity[]>([]);
+  const [entities, _setEntities] = useState<Entity[]>([]);
+  const [history, setHistory] = useState<Entity[][]>([]);
   const [cursorPos, setCursorPos] = useState<Point>({ x: 0, y: 0 });
+
+  const setEntities = (action: React.SetStateAction<Entity[]>) => {
+    _setEntities(prev => {
+      const next = typeof action === 'function' ? (action as any)(prev) : action;
+      if (prev !== next) {
+        setHistory(h => [...h, prev]);
+      }
+      return next;
+    });
+  };
   
   // OSNAP state
   const [snapPoint, setSnapPoint] = useState<{point: Point, type: 'endpoint'|'center'} | null>(null);
@@ -128,6 +140,14 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
   useImperativeHandle(ref, () => ({
     getEntities: () => entities,
+    undo: () => {
+      setHistory(h => {
+        if (h.length === 0) return h;
+        const prev = h[h.length - 1];
+        _setEntities(prev);
+        return h.slice(0, -1);
+      });
+    }
   }));
 
   // Update prompt based on command state

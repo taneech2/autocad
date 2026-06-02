@@ -84,6 +84,13 @@ function App() {
   };
 
   const handleCommandClick = (cmd: string) => {
+    if (cmd === 'UNDO') {
+      canvasRef.current?.undo();
+      setHistory(prev => [...prev, `Command: UNDO`]);
+      setTypedInputToProcess(null);
+      setCommandInput('');
+      return;
+    }
     setActiveCommand(cmd);
     setHistory(prev => [...prev, `Command: ${cmd}`]);
     setTypedInputToProcess(null);
@@ -113,6 +120,7 @@ function App() {
         else if (input === 'T' || input === 'TEXT') handleCommandClick('TEXT');
         else if (input === 'DLI' || input === 'DIMENSION') handleCommandClick('DIMENSION');
         else if (input === 'P' || input === 'PAN') handleCommandClick('PAN');
+        else if (input === 'U' || input === 'UNDO') handleCommandClick('UNDO');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
         if (input === '') setTypedInputToProcess('ENTER_KEY');
