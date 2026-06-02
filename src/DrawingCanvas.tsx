@@ -8,7 +8,9 @@ export interface Line extends BaseEntity { type: 'LINE'; start: Point; end: Poin
 export interface Circle extends BaseEntity { type: 'CIRCLE'; center: Point; radius: number; }
 export interface Rectangle extends BaseEntity { type: 'RECTANGLE'; p1: Point; p2: Point; filletRadius?: number; chamferDist?: number; }
 export interface Arc extends BaseEntity { type: 'ARC'; start: Point; control: Point; end: Point; radius: number; }
-export type Entity = Line | Circle | Rectangle | Arc;
+export interface Text extends BaseEntity { type: 'TEXT'; start: Point; text: string; height: number; }
+export interface Dimension extends BaseEntity { type: 'DIMENSION'; p1: Point; p2: Point; dimLinePos: Point; text: string; }
+export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension;
 
 interface DrawingCanvasProps {
   activeCommand: string | null;
@@ -176,6 +178,14 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       else if (commandStep === 3) onPromptChange(tempPoints[0]?.x === 0 ? `ARRAY Enter number of rows:` : `ARRAY Enter number of items:`);
       else if (commandStep === 4) onPromptChange(tempPoints[0]?.x === 0 ? `ARRAY Enter distance between columns:` : `ARRAY Enter angle to fill (e.g. 360):`);
       else if (commandStep === 5) onPromptChange(`ARRAY Enter distance between rows:`);
+    } else if (activeCommand === 'TEXT') {
+      if (commandStep === 0) onPromptChange(`TEXT Specify start point of text:`);
+      else if (commandStep === 1) onPromptChange(`TEXT Specify height:`);
+      else if (commandStep === 2) onPromptChange(`TEXT Enter text:`);
+    } else if (activeCommand === 'DIMENSION') {
+      if (commandStep === 0) onPromptChange(`DIMENSION Specify first extension line origin:`);
+      else if (commandStep === 1) onPromptChange(`DIMENSION Specify second extension line origin:`);
+      else if (commandStep === 2) onPromptChange(`DIMENSION Specify dimension line location:`);
     }
   }, [activeCommand, commandStep, selectedIds.size, onPromptChange]);
 
@@ -410,6 +420,44 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         ctx.moveTo(entity.start.x, entity.start.y);
         ctx.arcTo(entity.control.x, entity.control.y, entity.end.x, entity.end.y, entity.radius);
         ctx.stroke();
+      } else if (entity.type === 'TEXT') {
+        ctx.save();
+        ctx.scale(1, -1);
+        ctx.font = `${entity.height}px Consolas`;
+        ctx.fillStyle = isSelected ? '#3399ff' : '#ffffff';
+        ctx.fillText(entity.text, entity.start.x, -entity.start.y);
+        ctx.restore();
+      } else if (entity.type === 'DIMENSION') {
+        ctx.beginPath();
+        // Calculate dimension line points
+        let isVertical = Math.abs(entity.p1.x - entity.p2.x) < Math.abs(entity.p1.y - entity.p2.y);
+        
+        let d1, d2;
+        if (isVertical) {
+            d1 = { x: entity.dimLinePos.x, y: entity.p1.y };
+            d2 = { x: entity.dimLinePos.x, y: entity.p2.y };
+            ctx.moveTo(entity.p1.x, entity.p1.y); ctx.lineTo(d1.x, d1.y);
+            ctx.moveTo(entity.p2.x, entity.p2.y); ctx.lineTo(d2.x, d2.y);
+        } else {
+            d1 = { x: entity.p1.x, y: entity.dimLinePos.y };
+            d2 = { x: entity.p2.x, y: entity.dimLinePos.y };
+            ctx.moveTo(entity.p1.x, entity.p1.y); ctx.lineTo(d1.x, d1.y);
+            ctx.moveTo(entity.p2.x, entity.p2.y); ctx.lineTo(d2.x, d2.y);
+        }
+        ctx.moveTo(d1.x, d1.y); ctx.lineTo(d2.x, d2.y);
+        ctx.stroke();
+        
+        // Draw text
+        ctx.save();
+        ctx.scale(1, -1);
+        ctx.font = `1.5px Consolas`;
+        ctx.fillStyle = isSelected ? '#3399ff' : '#00ffaa';
+        const midX = (d1.x + d2.x) / 2;
+        const midY = (d1.y + d2.y) / 2;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(entity.text, midX, -midY - 0.5);
+        ctx.restore();
       }
       ctx.setLineDash([]); 
     }
@@ -1069,6 +1117,34 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                 }
                 return next;
             });
+            onCommandComplete();
+        }
+    } else if (activeCommand === 'TEXT') {
+        if (commandStep === 0 && typeof input === 'object' && 'x' in input) {
+            setTempPoints([input]);
+            setCommandStep(1);
+        } else if (commandStep === 1 && typeof input === 'number') {
+            setTempPoints(prev => [...prev, { x: input, y: 0 }]); // x represents height
+            setCommandStep(2);
+        } else if (commandStep === 2 && typeof input === 'string') {
+            const start = tempPoints[0];
+            const height = tempPoints[1].x;
+            setEntities(prev => [...prev, { id: generateId(), type: 'TEXT', start, text: input, height }]);
+            onCommandComplete();
+        }
+    } else if (activeCommand === 'DIMENSION') {
+        if (commandStep === 0 && typeof input === 'object' && 'x' in input) {
+            setTempPoints([input]);
+            setCommandStep(1);
+        } else if (commandStep === 1 && typeof input === 'object' && 'x' in input) {
+            setTempPoints(prev => [...prev, input]);
+            setCommandStep(2);
+        } else if (commandStep === 2 && typeof input === 'object' && 'x' in input) {
+            const p1 = tempPoints[0];
+            const p2 = tempPoints[1];
+            const dimLinePos = input;
+            const dist = Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)).toFixed(2);
+            setEntities(prev => [...prev, { id: generateId(), type: 'DIMENSION', p1, p2, dimLinePos, text: dist }]);
             onCommandComplete();
         }
     }

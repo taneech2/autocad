@@ -16,6 +16,7 @@ interface LessonParams {
   l7_cx: number; l7_cy: number; l7_r: number; l7_dist: number;
   l8_rectX: number; l8_rectY: number; l8_rectW: number; l8_rectH: number; l8_radius: number;
   l9_circX: number; l9_circY: number; l9_circR: number; l9_cols: number; l9_rows: number; l9_dist: number;
+  l10_textX: number; l10_textY: number; l10_textStr: string;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -30,7 +31,8 @@ const generateRandomParams = (): LessonParams => {
     l6_x: randInt(-3, 3), l6_y: randInt(-3, 3), l6_len: randInt(3, 6), l6_ang: [90, -90, 45, -45][randInt(0, 3)],
     l7_cx: randInt(-5, 5), l7_cy: randInt(-5, 5), l7_r: randInt(2, 4), l7_dist: randInt(1, 3),
     l8_rectX: randInt(-5, -2), l8_rectY: randInt(-5, -2), l8_rectW: randInt(5, 8), l8_rectH: randInt(5, 8), l8_radius: randInt(1, 2),
-    l9_circX: randInt(-8, -4), l9_circY: randInt(-8, -4), l9_circR: randInt(1, 2), l9_cols: randInt(2, 4), l9_rows: randInt(2, 4), l9_dist: randInt(3, 5)
+    l9_circX: randInt(-8, -4), l9_circY: randInt(-8, -4), l9_circR: randInt(1, 2), l9_cols: randInt(2, 4), l9_rows: randInt(2, 4), l9_dist: randInt(3, 5),
+    l10_textX: randInt(2, 5), l10_textY: randInt(2, 5), l10_textStr: ["AUTO", "CAD", "DRAW", "LINE"][randInt(0, 3)]
   };
 };
 
@@ -108,6 +110,8 @@ function App() {
         else if (input === 'F' || input === 'FILLET') handleCommandClick('FILLET');
         else if (input === 'CHA' || input === 'CHAMFER') handleCommandClick('CHAMFER');
         else if (input === 'AR' || input === 'ARRAY') handleCommandClick('ARRAY');
+        else if (input === 'T' || input === 'TEXT') handleCommandClick('TEXT');
+        else if (input === 'DLI' || input === 'DIMENSION') handleCommandClick('DIMENSION');
         else if (input === 'P' || input === 'PAN') handleCommandClick('PAN');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
@@ -190,6 +194,10 @@ function App() {
     } else if (currentLesson === 9) {
       const circles = entities.filter(e => e.type === 'CIRCLE') as any[];
       if (circles.length >= lessonParams.l9_cols * lessonParams.l9_rows) passed = true;
+    } else if (currentLesson === 10) {
+      const texts = entities.filter(e => e.type === 'TEXT') as any[];
+      const dims = entities.filter(e => e.type === 'DIMENSION') as any[];
+      if (texts.length >= 1 && dims.length >= 1) passed = true;
     }
 
     if (passed) {
@@ -197,7 +205,7 @@ function App() {
       setScore(prev => prev + points);
       setIsTimerRunning(false);
       alert(`ยอดเยี่ยม! ภารกิจสำเร็จ คุณได้รับ ${points} คะแนน (เหลือเวลา ${timeLeft} วินาที)`);
-      if (currentLesson < 9) setCurrentLesson(c => c + 1);
+      if (currentLesson < 10) setCurrentLesson(c => c + 1);
     } else {
       alert("ยังไม่ถูกต้อง ลองตรวจสอบพิกัดและวาดตามโจทย์ให้ครบถ้วนดูอีกครั้งนะครับ");
     }
@@ -246,6 +254,14 @@ function App() {
           </button>
         </div>
         <div className="ribbon-group">
+          <button className={`ribbon-button ${activeCommand === 'TEXT' ? 'active' : ''}`} onClick={() => handleCommandClick('TEXT')}>
+            <Type size={20} /><span>Text</span>
+          </button>
+          <button className={`ribbon-button ${activeCommand === 'DIMENSION' ? 'active' : ''}`} onClick={() => handleCommandClick('DIMENSION')}>
+            <Maximize size={20} /><span>Dimension</span>
+          </button>
+        </div>
+        <div className="ribbon-group">
           <button className={`ribbon-button ${activeCommand === 'ROTATE' ? 'active' : ''}`} onClick={() => handleCommandClick('ROTATE')}>
             <RotateCw size={20} /><span>Rotate</span>
           </button>
@@ -275,8 +291,8 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <button onClick={() => { setCurrentLesson(Math.max(1, currentLesson - 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
-            <span>บทเรียน (Lesson {currentLesson}/9)</span>
-            <button onClick={() => { setCurrentLesson(Math.min(9, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            <span>บทเรียน (Lesson {currentLesson}/10)</span>
+            <button onClick={() => { setCurrentLesson(Math.min(10, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
           <div className="sidebar-content">
@@ -417,6 +433,23 @@ function App() {
                   <li>พิมพ์จำนวนคอลัมน์ <code>{lessonParams.l9_cols}</code> และ จำนวนแถว <code>{lessonParams.l9_rows}</code></li>
                   <li>พิมพ์ระยะห่างคอลัมน์และแถว อย่างละ <code>{lessonParams.l9_dist}</code> กด Enter</li>
                   <li>ระบบจะสร้างวงกลมทั้งหมด {lessonParams.l9_cols * lessonParams.l9_rows} วงเรียงกัน!</li>
+                </ol>
+              </>
+            )}
+
+            {currentLesson === 10 && (
+              <>
+                <h3>บทที่ 10: ตัวหนังสือและเส้นบอกขนาด (TEXT & DIM)</h3>
+                <p>จบหลักสูตรด้วยการใส่ข้อความและวัดระยะวัตถุครับ!</p>
+                <ol>
+                  <li>พิมพ์ <code>T</code> (TEXT) กด Enter</li>
+                  <li>คลิกเลือกจุดเริ่มต้นที่ <code>{lessonParams.l10_textX},{lessonParams.l10_textY}</code></li>
+                  <li>พิมพ์ความสูงของตัวอักษร <code>2</code> กด Enter</li>
+                  <li>พิมพ์ข้อความ <code>{lessonParams.l10_textStr}</code> กด Enter</li>
+                  <li>ทีนี้ลองวาดเส้นตรง (LINE) สักเส้น</li>
+                  <li>พิมพ์ <code>DLI</code> (DIMENSION) หรือคลิกปุ่ม</li>
+                  <li>คลิกจุดเริ่มต้นและจุดสิ้นสุดของเส้นตรง เพื่อวัดระยะ</li>
+                  <li>เลื่อนเมาส์แล้วคลิกเพื่อวางเส้นบอกขนาด!</li>
                 </ol>
               </>
             )}
