@@ -117,6 +117,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectionBox, setSelectionBox] = useState<{start: Point, end: Point} | null>(null);
 
   // Command state
   const [commandStep, setCommandStep] = useState<number>(0);
@@ -461,6 +462,22 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
          }
       }
 
+      if (selectionBox) {
+        const isLeftToRight = selectionBox.end.x > selectionBox.start.x;
+        const width = selectionBox.end.x - selectionBox.start.x;
+        const height = selectionBox.end.y - selectionBox.start.y;
+        
+        ctx.fillStyle = isLeftToRight ? 'rgba(0, 100, 255, 0.2)' : 'rgba(0, 255, 100, 0.2)';
+        ctx.strokeStyle = isLeftToRight ? 'rgba(0, 100, 255, 0.8)' : 'rgba(0, 255, 100, 0.8)';
+        ctx.lineWidth = 1 / zoom;
+        if (!isLeftToRight) ctx.setLineDash([5/zoom, 5/zoom]);
+        else ctx.setLineDash([]);
+        
+        ctx.fillRect(selectionBox.start.x, selectionBox.start.y, width, height);
+        ctx.strokeRect(selectionBox.start.x, selectionBox.start.y, width, height);
+        ctx.setLineDash([]);
+      }
+
       if (snapPoint) {
         const sp = snapPoint as {point: Point, type: 'endpoint'|'center'};
         ctx.strokeStyle = '#ffff00'; 
@@ -493,7 +510,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
     render();
     return () => window.removeEventListener('resize', resizeCanvas);
-  }, [pan, zoom, entities, cursorPos, activeCommand, commandStep, tempPoints, selectedIds, snapPoint]);
+  }, [pan, zoom, entities, cursorPos, activeCommand, commandStep, tempPoints, selectedIds, snapPoint, selectionBox]);
 
   const drawGrid = (ctx: CanvasRenderingContext2D) => {
     ctx.strokeStyle = '#3e3e42';
@@ -531,6 +548,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     if (isPanning) {
       setPan(prev => ({ x: prev.x + e.clientX - lastMousePos.x, y: prev.y + e.clientY - lastMousePos.y }));
       setLastMousePos({ x: e.clientX, y: e.clientY });
+    } else if (selectionBox) {
+      setSelectionBox(prev => prev ? { ...prev, end: wPos } : null);
     }
   };
 
@@ -555,6 +574,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
               else next.add(hitId);
               return next;
             });
+         } else {
+            setSelectionBox({ start: wPos, end: wPos });
          }
          return;
       }
@@ -571,7 +592,62 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     }
   };
 
-  const handleMouseUp = () => setIsPanning(false);
+  const handleMouseUp = () => {
+    setIsPanning(false);
+    if (selectionBox) {
+       const isLeftToRight = selectionBox.end.x > selectionBox.start.x;
+       const minX = Math.min(selectionBox.start.x, selectionBox.end.x);
+       const maxX = Math.max(selectionBox.start.x, selectionBox.end.x);
+       const minY = Math.min(selectionBox.start.y, selectionBox.end.y);
+       const maxY = Math.max(selectionBox.start.y, selectionBox.end.y);
+       
+       const newSelected = new Set<string>();
+       entities.forEach(entity => {
+           let inside = false;
+           let intersect = false;
+           
+           const ptInside = (pt: Point) => pt.x >= minX && pt.x <= maxX && pt.y >= minY && pt.y <= maxY;
+           
+           if (entity.type === 'LINE') {
+               inside = ptInside(entity.start) && ptInside(entity.end);
+               intersect = inside || ptInside(entity.start) || ptInside(entity.end);
+               if (!intersect) {
+                   const segs = [
+                       {p1: {x: minX, y: minY}, p2: {x: maxX, y: minY}},
+                       {p1: {x: maxX, y: minY}, p2: {x: maxX, y: maxY}},
+                       {p1: {x: maxX, y: maxY}, p2: {x: minX, y: maxY}},
+                       {p1: {x: minX, y: maxY}, p2: {x: minX, y: minY}}
+                   ];
+                   intersect = segs.some(seg => getLineSegmentIntersection(entity.start, entity.end, seg.p1, seg.p2) !== null);
+               }
+           } else if (entity.type === 'RECTANGLE') {
+               inside = ptInside(entity.p1) && ptInside(entity.p2);
+               const rMinX = Math.min(entity.p1.x, entity.p2.x);
+               const rMaxX = Math.max(entity.p1.x, entity.p2.x);
+               const rMinY = Math.min(entity.p1.y, entity.p2.y);
+               const rMaxY = Math.max(entity.p1.y, entity.p2.y);
+               intersect = !(rMaxX < minX || rMinX > maxX || rMaxY < minY || rMinY > maxY);
+           } else if (entity.type === 'CIRCLE') {
+               inside = (entity.center.x - entity.radius >= minX) && (entity.center.x + entity.radius <= maxX) &&
+                        (entity.center.y - entity.radius >= minY) && (entity.center.y + entity.radius <= maxY);
+               const closestX = Math.max(minX, Math.min(entity.center.x, maxX));
+               const closestY = Math.max(minY, Math.min(entity.center.y, maxY));
+               const dx = entity.center.x - closestX;
+               const dy = entity.center.y - closestY;
+               intersect = (dx * dx + dy * dy) <= (entity.radius * entity.radius);
+           }
+           
+           if (inside || (!isLeftToRight && intersect)) {
+               newSelected.add(entity.id);
+           }
+       });
+
+       if (newSelected.size > 0) {
+           setSelectedIds(prev => new Set([...prev, ...newSelected]));
+       }
+       setSelectionBox(null);
+    }
+  };
 
   const handleWheel = (e: ReactWheelEvent) => {
     e.preventDefault();
