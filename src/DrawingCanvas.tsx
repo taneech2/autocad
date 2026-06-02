@@ -730,6 +730,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         });
         onCommandComplete();
       }
+    } else if (activeCommand === 'OFFSET' && commandStep === 0) {
+        if (typeof input === 'number') {
+            setTempPoints([{ x: input, y: 0 }]); // Store distance in x of first temp point
+            setCommandStep(1);
+        }
     } else if (activeCommand === 'OFFSET' && commandStep === 1) {
         if (typeof input !== 'object' || !('x' in input)) return;
         const pt = input as Point;
