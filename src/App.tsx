@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, Layers, Monitor, Crop, Type } from 'lucide-react';
+import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, Layers, Monitor, Crop, Type, ChevronsRight, MoveHorizontal } from 'lucide-react';
 import DrawingCanvas, { type DrawingCanvasHandle } from './DrawingCanvas';
 import './App.css';
 
@@ -17,6 +17,7 @@ interface LessonParams {
   l8_rectX: number; l8_rectY: number; l8_rectW: number; l8_rectH: number; l8_radius: number;
   l9_circX: number; l9_circY: number; l9_circR: number; l9_cols: number; l9_rows: number; l9_dist: number;
   l10_textX: number; l10_textY: number; l10_textStr: string;
+  l11_lineX: number; l11_lineY: number;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -32,7 +33,8 @@ const generateRandomParams = (): LessonParams => {
     l7_cx: randInt(-5, 5), l7_cy: randInt(-5, 5), l7_r: randInt(2, 4), l7_dist: randInt(1, 3),
     l8_rectX: randInt(-5, -2), l8_rectY: randInt(-5, -2), l8_rectW: randInt(5, 8), l8_rectH: randInt(5, 8), l8_radius: randInt(1, 2),
     l9_circX: randInt(-8, -4), l9_circY: randInt(-8, -4), l9_circR: randInt(1, 2), l9_cols: randInt(2, 4), l9_rows: randInt(2, 4), l9_dist: randInt(3, 5),
-    l10_textX: randInt(2, 5), l10_textY: randInt(2, 5), l10_textStr: ["AUTO", "CAD", "DRAW", "LINE"][randInt(0, 3)]
+    l10_textX: randInt(2, 5), l10_textY: randInt(2, 5), l10_textStr: ["AUTO", "CAD", "DRAW", "LINE"][randInt(0, 3)],
+    l11_lineX: randInt(-4, 4), l11_lineY: randInt(-4, 4)
   };
 };
 
@@ -121,6 +123,8 @@ function App() {
         else if (input === 'DLI' || input === 'DIMENSION') handleCommandClick('DIMENSION');
         else if (input === 'P' || input === 'PAN') handleCommandClick('PAN');
         else if (input === 'U' || input === 'UNDO') handleCommandClick('UNDO');
+        else if (input === 'EX' || input === 'EXTEND') handleCommandClick('EXTEND');
+        else if (input === 'S' || input === 'STRETCH') handleCommandClick('STRETCH');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
         if (input === '') setTypedInputToProcess('ENTER_KEY');
@@ -206,6 +210,11 @@ function App() {
       const texts = entities.filter(e => e.type === 'TEXT') as any[];
       const dims = entities.filter(e => e.type === 'DIMENSION') as any[];
       if (texts.length >= 1 && dims.length >= 1) passed = true;
+    } else if (currentLesson === 11) {
+      const lines = entities.filter(e => e.type === 'LINE') as any[];
+      const extendedLines = lines.filter(l => l.end.x === 5 && l.end.y === 0 && l.start.x === 0 && l.start.y === 0);
+      const stretchedLines = lines.filter(l => (l.start.x === 2 && l.start.y === -2 && l.end.x === 2 && l.end.y === 0) || (l.start.x === 2 && l.start.y === 0 && l.end.x === 2 && l.end.y === -2));
+      if (extendedLines.length >= 1 || stretchedLines.length >= 1) passed = true;
     }
 
     if (passed) {
@@ -213,7 +222,7 @@ function App() {
       setScore(prev => prev + points);
       setIsTimerRunning(false);
       alert(`ยอดเยี่ยม! ภารกิจสำเร็จ คุณได้รับ ${points} คะแนน (เหลือเวลา ${timeLeft} วินาที)`);
-      if (currentLesson < 10) setCurrentLesson(c => c + 1);
+      if (currentLesson < 11) setCurrentLesson(c => c + 1);
     } else {
       alert("ยังไม่ถูกต้อง ลองตรวจสอบพิกัดและวาดตามโจทย์ให้ครบถ้วนดูอีกครั้งนะครับ");
     }
@@ -307,11 +316,11 @@ function App() {
               onChange={(e) => { setCurrentLesson(Number(e.target.value)); stopChallenge(); }}
               style={{ background: '#252526', color: 'white', border: '1px solid #3e3e42', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', outline: 'none', flexGrow: 1, margin: '0 10px', textAlign: 'center' }}
             >
-              {[...Array(10)].map((_, i) => (
+              {[...Array(11)].map((_, i) => (
                 <option key={i+1} value={i+1}>บทเรียนที่ {i+1}</option>
               ))}
             </select>
-            <button onClick={() => { setCurrentLesson(Math.min(10, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            <button onClick={() => { setCurrentLesson(Math.min(11, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
           <div className="sidebar-content">

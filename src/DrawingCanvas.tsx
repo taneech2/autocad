@@ -63,6 +63,43 @@ const getLineSegmentIntersection = (p1: Point, p2: Point, p3: Point, p4: Point):
   return null;
 };
 
+const getRaySegmentIntersection = (rayOrigin: Point, rayDir: {x: number, y: number}, segP1: Point, segP2: Point): Point | null => {
+  const v1 = rayOrigin.x - segP1.x;
+  const v2 = rayOrigin.y - segP1.y;
+  const v3 = segP2.x - segP1.x;
+  const v4 = segP2.y - segP1.y;
+
+  const det = v3 * rayDir.y - v4 * rayDir.x;
+  if (Math.abs(det) < 1e-6) return null;
+
+  const t = (v3 * v2 - v4 * v1) / det;
+  const u = (rayDir.x * v2 - rayDir.y * v1) / det;
+
+  if (t > 1e-5 && u >= -1e-5 && u <= 1.00001) {
+    return { x: rayOrigin.x + t * rayDir.x, y: rayOrigin.y + t * rayDir.y };
+  }
+  return null;
+};
+
+const getRayCircleIntersection = (rayOrigin: Point, rayDir: {x: number, y: number}, center: Point, radius: number): Point[] => {
+  const dx = rayDir.x;
+  const dy = rayDir.y;
+  const a = dx*dx + dy*dy;
+  const b = 2 * (dx*(rayOrigin.x - center.x) + dy*(rayOrigin.y - center.y));
+  const c = (rayOrigin.x - center.x)**2 + (rayOrigin.y - center.y)**2 - radius**2;
+  
+  const disc = b*b - 4*a*c;
+  if (disc < 0) return [];
+  
+  const t1 = (-b + Math.sqrt(disc)) / (2*a);
+  const t2 = (-b - Math.sqrt(disc)) / (2*a);
+  
+  const pts: Point[] = [];
+  if (t1 > 1e-5) pts.push({x: rayOrigin.x + t1*dx, y: rayOrigin.y + t1*dy});
+  if (t2 > 1e-5) pts.push({x: rayOrigin.x + t2*dx, y: rayOrigin.y + t2*dy});
+  return pts;
+};
+
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // Math helpers
@@ -137,6 +174,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   // Command state
   const [commandStep, setCommandStep] = useState<number>(0);
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
+  const [stretchedPoints, setStretchedPoints] = useState<{id: string, isStart: boolean}[]>([]);
 
   useImperativeHandle(ref, () => ({
     getEntities: () => entities,
@@ -157,6 +195,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       setCommandStep(0);
       setTempPoints([]);
       setSelectedIds(new Set());
+      setStretchedPoints([]);
       return;
     }
 
@@ -206,6 +245,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       if (commandStep === 0) onPromptChange(`DIMENSION Specify first extension line origin:`);
       else if (commandStep === 1) onPromptChange(`DIMENSION Specify second extension line origin:`);
       else if (commandStep === 2) onPromptChange(`DIMENSION Specify dimension line location:`);
+    } else if (activeCommand === 'EXTEND') {
+      onPromptChange(`EXTEND Select object to extend:`);
+    } else if (activeCommand === 'STRETCH') {
+      if (commandStep === 0) onPromptChange(`STRETCH Select first corner of crossing window:`);
+      else if (commandStep === 1) onPromptChange(`STRETCH Select opposite corner:`);
+      else if (commandStep === 2) onPromptChange(`STRETCH Specify base point:`);
+      else if (commandStep === 3) onPromptChange(`STRETCH Specify second point:`);
     }
   }, [activeCommand, commandStep, selectedIds.size, onPromptChange]);
 
@@ -217,7 +263,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
           if (selectedIds.size > 0) setCommandStep(1);
         } else if (activeCommand === 'LINE' && commandStep === 1) {
           onCommandComplete();
-        } else if (activeCommand === 'TRIM') {
+        } else if (activeCommand === 'TRIM' || activeCommand === 'EXTEND') {
           onCommandComplete();
         }
         onInputProcessed();
@@ -361,6 +407,69 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         }
         return next;
       });
+    }
+  };
+
+  const executeExtend = (targetId: string, clickPos: Point) => {
+    const targetEntity = entities.find(e => e.id === targetId);
+    if (!targetEntity || targetEntity.type !== 'LINE') return;
+
+    const dStart = distance(clickPos, targetEntity.start);
+    const dEnd = distance(clickPos, targetEntity.end);
+    
+    let rayStart: Point, rayEnd: Point;
+    let clickedEndIsEnd = dEnd < dStart;
+    
+    if (clickedEndIsEnd) {
+       rayStart = targetEntity.start;
+       rayEnd = targetEntity.end;
+    } else {
+       rayStart = targetEntity.end;
+       rayEnd = targetEntity.start;
+    }
+    
+    const rayDir = { x: rayEnd.x - rayStart.x, y: rayEnd.y - rayStart.y };
+    const len = Math.sqrt(rayDir.x*rayDir.x + rayDir.y*rayDir.y);
+    if (len === 0) return;
+    rayDir.x /= len;
+    rayDir.y /= len;
+
+    const intersections: Point[] = [];
+    
+    entities.forEach(other => {
+       if (other.id === targetId) return;
+       const segments = getEntitySegments(other);
+       segments.forEach(seg => {
+           const pt = getRaySegmentIntersection(rayEnd, rayDir, seg.p1, seg.p2);
+           if (pt) intersections.push(pt);
+       });
+       if (other.type === 'CIRCLE') {
+           const pts = getRayCircleIntersection(rayEnd, rayDir, other.center, other.radius);
+           intersections.push(...pts);
+       }
+    });
+    
+    if (intersections.length > 0) {
+       let closest = intersections[0];
+       let minDist = distance(rayEnd, closest);
+       for (let i = 1; i < intersections.length; i++) {
+           const d = distance(rayEnd, intersections[i]);
+           if (d < minDist) {
+               minDist = d;
+               closest = intersections[i];
+           }
+       }
+       
+       setEntities(prev => prev.map(e => {
+           if (e.id === targetId && e.type === 'LINE') {
+               if (clickedEndIsEnd) {
+                   return { ...e, end: closest };
+               } else {
+                   return { ...e, start: closest };
+               }
+           }
+           return e;
+       }));
     }
   };
 
@@ -547,6 +656,30 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
           if (entity.type === 'LINE') drawEntity(ctx, { ...entity, start: {x: entity.start.x + dx, y: entity.start.y + dy}, end: {x: entity.end.x + dx, y: entity.end.y + dy} }, false, true);
           else if (entity.type === 'CIRCLE') drawEntity(ctx, { ...entity, center: {x: entity.center.x + dx, y: entity.center.y + dy} }, false, true);
           else if (entity.type === 'RECTANGLE') drawEntity(ctx, { ...entity, p1: {x: entity.p1.x + dx, y: entity.p1.y + dy}, p2: {x: entity.p2.x + dx, y: entity.p2.y + dy} }, false, true);
+        });
+      } else if (activeCommand === 'STRETCH' && commandStep === 1 && tempPoints.length > 0) {
+        ctx.strokeStyle = '#00ffaa'; 
+        ctx.lineWidth = 1 / zoom;
+        ctx.setLineDash([5/zoom, 5/zoom]);
+        ctx.strokeRect(Math.min(tempPoints[0].x, cursorPos.x), Math.min(tempPoints[0].y, cursorPos.y), Math.abs(cursorPos.x - tempPoints[0].x), Math.abs(cursorPos.y - tempPoints[0].y));
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(0, 255, 170, 0.1)';
+        ctx.fillRect(Math.min(tempPoints[0].x, cursorPos.x), Math.min(tempPoints[0].y, cursorPos.y), Math.abs(cursorPos.x - tempPoints[0].x), Math.abs(cursorPos.y - tempPoints[0].y));
+      } else if (activeCommand === 'STRETCH' && commandStep === 3 && tempPoints.length > 0) {
+        const basePoint = tempPoints[0];
+        const dx = cursorPos.x - basePoint.x;
+        const dy = cursorPos.y - basePoint.y;
+        
+        entities.forEach(entity => {
+          if (entity.type === 'LINE') {
+            const stretchStart = stretchedPoints.some(p => p.id === entity.id && p.isStart);
+            const stretchEnd = stretchedPoints.some(p => p.id === entity.id && !p.isStart);
+            if (stretchStart || stretchEnd) {
+              const s = stretchStart ? {x: entity.start.x + dx, y: entity.start.y + dy} : entity.start;
+              const e = stretchEnd ? {x: entity.end.x + dx, y: entity.end.y + dy} : entity.end;
+              drawEntity(ctx, { ...entity, start: s, end: e }, false, true);
+            }
+          }
         });
       } else if (commandStep === 2 && tempPoints.length > 0) {
          const origin = tempPoints[0];
@@ -742,6 +875,14 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         }
         return;
       }
+      
+      if (activeCommand === 'EXTEND') {
+        const hitId = hitTest(wPos);
+        if (hitId) {
+          executeExtend(hitId, wPos);
+        }
+        return;
+      }
 
       handleCommandInput(pt, wPos);
     }
@@ -811,6 +952,65 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   };
 
   const handleCommandInput = (input: Point | number | string, rawWPos?: Point) => {
+    if (activeCommand === 'STRETCH') {
+       const pt = typeof input === 'object' ? input : { x: 0, y: 0 };
+       if (commandStep === 0) {
+           setTempPoints([pt]);
+           setCommandStep(1);
+       } else if (commandStep === 1) {
+           const p1 = tempPoints[0];
+           const p2 = pt;
+           const minX = Math.min(p1.x, p2.x);
+           const maxX = Math.max(p1.x, p2.x);
+           const minY = Math.min(p1.y, p2.y);
+           const maxY = Math.max(p1.y, p2.y);
+           
+           const ptsToStretch: {id: string, isStart: boolean}[] = [];
+           entities.forEach(e => {
+               if (e.type === 'LINE') {
+                   if (e.start.x >= minX && e.start.x <= maxX && e.start.y >= minY && e.start.y <= maxY) {
+                       ptsToStretch.push({ id: e.id, isStart: true });
+                   }
+                   if (e.end.x >= minX && e.end.x <= maxX && e.end.y >= minY && e.end.y <= maxY) {
+                       ptsToStretch.push({ id: e.id, isStart: false });
+                   }
+               }
+           });
+           setStretchedPoints(ptsToStretch);
+           setTempPoints([]); 
+           setCommandStep(2);
+       } else if (commandStep === 2) {
+           setTempPoints([pt]);
+           setCommandStep(3);
+       } else if (commandStep === 3) {
+           const basePoint = tempPoints[0];
+           const dx = pt.x - basePoint.x;
+           const dy = pt.y - basePoint.y;
+           
+           setEntities(prev => prev.map(e => {
+               if (e.type !== 'LINE') return e;
+               let newStart = { ...e.start };
+               let newEnd = { ...e.end };
+               
+               const stretchStart = stretchedPoints.find(p => p.id === e.id && p.isStart);
+               const stretchEnd = stretchedPoints.find(p => p.id === e.id && !p.isStart);
+               
+               if (stretchStart) {
+                   newStart.x += dx; newStart.y += dy;
+               }
+               if (stretchEnd) {
+                   newEnd.x += dx; newEnd.y += dy;
+               }
+               
+               if (stretchStart || stretchEnd) {
+                   return { ...e, start: newStart, end: newEnd };
+               }
+               return e;
+           }));
+           onCommandComplete();
+       }
+       return;
+    }
     if (activeCommand === 'LINE') {
       if (input === 'UNDO' && tempPoints.length > 0) {
         setEntities(prev => {
