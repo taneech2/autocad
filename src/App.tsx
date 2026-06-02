@@ -252,6 +252,12 @@ function App() {
           <button className={`ribbon-button ${activeCommand === 'TRIM' ? 'active' : ''}`} onClick={() => handleCommandClick('TRIM')}>
             <Scissors size={20} /><span>Trim</span>
           </button>
+          <button className={`ribbon-button ${activeCommand === 'EXTEND' ? 'active' : ''}`} onClick={() => handleCommandClick('EXTEND')}>
+            <ChevronsRight size={20} /><span>Extend</span>
+          </button>
+          <button className={`ribbon-button ${activeCommand === 'STRETCH' ? 'active' : ''}`} onClick={() => handleCommandClick('STRETCH')}>
+            <MoveHorizontal size={20} /><span>Stretch</span>
+          </button>
         </div>
         <div className="ribbon-group">
           <button className={`ribbon-button ${activeCommand === 'MIRROR' ? 'active' : ''}`} onClick={() => handleCommandClick('MIRROR')}>
