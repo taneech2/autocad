@@ -488,6 +488,19 @@ function App() {
               </>
             )}
 
+            {currentLesson === 11 && (
+              <>
+                <h3>บทที่ 11: การยืดและต่อเส้น (EXTEND & STRETCH)</h3>
+                <p>คำสั่ง <strong>EXTEND (EX)</strong> ใช้สำหรับต่อความยาวเส้นให้ไปชนกับวัตถุอื่น และ <strong>STRETCH (S)</strong> ใช้สำหรับดึงยืดขนาดของรูปร่าง</p>
+                <ol>
+                  <li>วาดเส้นตรง (LINE) จาก <code>0,0</code> ไปที่ <code>5,0</code> (เส้นขอบ)</li>
+                  <li>วาดเส้นตรง (LINE) จาก <code>2,-2</code> ไปที่ <code>2,-1</code></li>
+                  <li>พิมพ์ <code>EX</code> แล้วเว้นวรรค 1 ครั้ง</li>
+                  <li>คลิกที่ปลายเส้นเส้นที่ 2 ด้านบน เพื่อยืดเส้นไปชนเส้นขอบที่ (2,0)</li>
+                </ol>
+              </>
+            )}
+
             <button onClick={verifyLesson} disabled={!isTimerRunning} style={{
               marginTop: '15px', padding: '10px 16px', 
               backgroundColor: isTimerRunning ? 'var(--accent)' : '#555', 
