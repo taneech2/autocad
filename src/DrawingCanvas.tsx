@@ -6,7 +6,7 @@ export interface Point { x: number; y: number; }
 export interface BaseEntity { id: string; }
 export interface Line extends BaseEntity { type: 'LINE'; start: Point; end: Point; }
 export interface Circle extends BaseEntity { type: 'CIRCLE'; center: Point; radius: number; }
-export interface Rectangle extends BaseEntity { type: 'RECTANGLE'; p1: Point; p2: Point; }
+export interface Rectangle extends BaseEntity { type: 'RECTANGLE'; p1: Point; p2: Point; filletRadius?: number; chamferDist?: number; }
 export type Entity = Line | Circle | Rectangle;
 
 interface DrawingCanvasProps {
@@ -160,6 +160,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       if (commandStep === 0) onPromptChange(`OFFSET Specify offset distance:`);
       else if (commandStep === 1) onPromptChange(`OFFSET Select object to offset:`);
       else if (commandStep === 2) onPromptChange(`OFFSET Specify point on side to offset:`);
+    } else if (activeCommand === 'FILLET') {
+      if (commandStep === 0) onPromptChange(`FILLET Specify fillet radius:`);
+      else if (commandStep === 1) onPromptChange(`FILLET Select rectangle to fillet:`);
+    } else if (activeCommand === 'CHAMFER') {
+      if (commandStep === 0) onPromptChange(`CHAMFER Specify chamfer distance:`);
+      else if (commandStep === 1) onPromptChange(`CHAMFER Select rectangle to chamfer:`);
     }
   }, [activeCommand, commandStep, selectedIds.size, onPromptChange]);
 
@@ -352,9 +358,38 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         ctx.stroke();
       } else if (entity.type === 'RECTANGLE') {
         ctx.beginPath();
-        const width = entity.p2.x - entity.p1.x;
-        const height = entity.p2.y - entity.p1.y;
-        ctx.rect(entity.p1.x, entity.p1.y, width, height);
+        const minX = Math.min(entity.p1.x, entity.p2.x);
+        const maxX = Math.max(entity.p1.x, entity.p2.x);
+        const minY = Math.min(entity.p1.y, entity.p2.y);
+        const maxY = Math.max(entity.p1.y, entity.p2.y);
+        const w = maxX - minX;
+        const h = maxY - minY;
+        
+        if (entity.filletRadius && entity.filletRadius > 0) {
+            const r = Math.min(entity.filletRadius, w / 2, h / 2);
+            ctx.moveTo(minX + r, minY);
+            ctx.lineTo(maxX - r, minY);
+            ctx.arcTo(maxX, minY, maxX, minY + r, r);
+            ctx.lineTo(maxX, maxY - r);
+            ctx.arcTo(maxX, maxY, maxX - r, maxY, r);
+            ctx.lineTo(minX + r, maxY);
+            ctx.arcTo(minX, maxY, minX, maxY - r, r);
+            ctx.lineTo(minX, minY + r);
+            ctx.arcTo(minX, minY, minX + r, minY, r);
+        } else if (entity.chamferDist && entity.chamferDist > 0) {
+            const d = Math.min(entity.chamferDist, w / 2, h / 2);
+            ctx.moveTo(minX + d, minY);
+            ctx.lineTo(maxX - d, minY);
+            ctx.lineTo(maxX, minY + d);
+            ctx.lineTo(maxX, maxY - d);
+            ctx.lineTo(maxX - d, maxY);
+            ctx.lineTo(minX + d, maxY);
+            ctx.lineTo(minX, maxY - d);
+            ctx.lineTo(minX, minY + d);
+            ctx.closePath();
+        } else {
+            ctx.rect(entity.p1.x, entity.p1.y, w, h);
+        }
         ctx.stroke();
       } else if (entity.type === 'CIRCLE') {
         ctx.beginPath();
@@ -837,11 +872,40 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                    }
                 }
                });
-            }
-            return next;
-         });
-         onCommandComplete();
+             }
+             return next;
+          });
+          onCommandComplete();
        }
+    } else if (activeCommand === 'FILLET' || activeCommand === 'CHAMFER') {
+        if (commandStep === 0 && typeof input === 'number') {
+            setTempPoints([{ x: input, y: 0 }]); // store radius or distance
+            setCommandStep(1);
+        } else if (commandStep === 1) {
+            if (typeof input !== 'object' || !('x' in input)) return;
+            const pt = input as Point;
+            const clickPos = rawWPos || pt;
+            const hitId = hitTest(clickPos);
+            if (hitId) {
+                const target = entities.find(e => e.id === hitId);
+                if (target && target.type === 'RECTANGLE') {
+                    const val = tempPoints[0].x;
+                    setEntities(prev => {
+                        const next = [...prev];
+                        const idx = next.findIndex(e => e.id === hitId);
+                        if (idx >= 0) {
+                            if (activeCommand === 'FILLET') {
+                                next[idx] = { ...target, filletRadius: val, chamferDist: 0 };
+                            } else {
+                                next[idx] = { ...target, chamferDist: val, filletRadius: 0 };
+                            }
+                        }
+                        return next;
+                    });
+                }
+                onCommandComplete();
+            }
+        }
     }
   };
 

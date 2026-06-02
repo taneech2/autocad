@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, FlipHorizontal, Layers } from 'lucide-react';
+import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, FlipHorizontal, Layers, Monitor, Crop } from 'lucide-react';
 import DrawingCanvas, { type DrawingCanvasHandle } from './DrawingCanvas';
 import './App.css';
 
@@ -14,6 +14,7 @@ interface LessonParams {
   l5_cx: number; l5_cy: number; l5_len: number;
   l6_x: number; l6_y: number; l6_len: number; l6_ang: number;
   l7_cx: number; l7_cy: number; l7_r: number; l7_dist: number;
+  l8_rectX: number; l8_rectY: number; l8_rectW: number; l8_rectH: number; l8_radius: number;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -26,7 +27,8 @@ const generateRandomParams = (): LessonParams => {
     l4_circX: randInt(-5, 5), l4_circY: randInt(-5, 5), l4_circR: randInt(1, 3), l4_copyDx: randInt(3, 7),
     l5_cx: randInt(-2, 2), l5_cy: randInt(-2, 2), l5_len: randInt(4, 6),
     l6_x: randInt(-3, 3), l6_y: randInt(-3, 3), l6_len: randInt(3, 6), l6_ang: [90, -90, 45, -45][randInt(0, 3)],
-    l7_cx: randInt(-5, 5), l7_cy: randInt(-5, 5), l7_r: randInt(2, 4), l7_dist: randInt(1, 3)
+    l7_cx: randInt(-5, 5), l7_cy: randInt(-5, 5), l7_r: randInt(2, 4), l7_dist: randInt(1, 3),
+    l8_rectX: randInt(-5, -2), l8_rectY: randInt(-5, -2), l8_rectW: randInt(5, 8), l8_rectH: randInt(5, 8), l8_radius: randInt(1, 2)
   };
 };
 
@@ -38,7 +40,6 @@ function App() {
   const [typedInputToProcess, setTypedInputToProcess] = useState<string | null>(null);
   const [currentLesson, setCurrentLesson] = useState<number>(1);
 
-  // Gamification State
   const [score, setScore] = useState<number>(0);
   const [difficulty, setDifficulty] = useState<Difficulty>('EASY');
   const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -70,7 +71,7 @@ function App() {
     if (difficulty === 'EASY') setTimeLeft(60);
     else if (difficulty === 'MEDIUM') setTimeLeft(40);
     else if (difficulty === 'HARD') setTimeLeft(20);
-    handleCommandComplete(); // Reset active commands
+    handleCommandComplete();
   };
 
   const stopChallenge = () => {
@@ -102,6 +103,8 @@ function App() {
         else if (input === 'SC' || input === 'SCALE') handleCommandClick('SCALE');
         else if (input === 'MI' || input === 'MIRROR') handleCommandClick('MIRROR');
         else if (input === 'O' || input === 'OFFSET') handleCommandClick('OFFSET');
+        else if (input === 'F' || input === 'FILLET') handleCommandClick('FILLET');
+        else if (input === 'CHA' || input === 'CHAMFER') handleCommandClick('CHAMFER');
         else if (input === 'P' || input === 'PAN') handleCommandClick('PAN');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
@@ -131,7 +134,7 @@ function App() {
     
     if (currentLesson === 1) {
       const lines = entities.filter(e => e.type === 'LINE');
-      if (lines.length >= 4) passed = true; // Simplified checking for speed, in production we'd check exact coordinates
+      if (lines.length >= 4) passed = true;
     } else if (currentLesson === 2) {
       const lines = entities.filter(e => e.type === 'LINE');
       if (lines.length >= 3) passed = true;
@@ -144,7 +147,6 @@ function App() {
       if (circles.length >= 2) passed = true;
     } else if (currentLesson === 5) {
       const lines = entities.filter(e => e.type === 'LINE') as any[];
-      // Check if total length is roughly 1.5 * l5_len
       const totalLen = lines.reduce((acc, l) => {
          const dx = l.start.x - l.end.x;
          const dy = l.start.y - l.end.y;
@@ -155,9 +157,6 @@ function App() {
       const lines = entities.filter(e => e.type === 'LINE') as any[];
       if (lines.length === 1) {
          const l = lines[0];
-         // Check if line rotated correctly. It should start at l6_x, l6_y.
-         // And length should be l6_len.
-         // And angle should be l6_ang.
          const dx = l.end.x - l.start.x;
          const dy = l.end.y - l.start.y;
          const len = Math.sqrt(dx*dx + dy*dy);
@@ -165,11 +164,9 @@ function App() {
          let targetAng = lessonParams.l6_ang;
          if (targetAng < -180) targetAng += 360;
          if (targetAng > 180) targetAng -= 360;
-         
          let actualAng = ang;
          if (actualAng < -180) actualAng += 360;
          if (actualAng > 180) actualAng -= 360;
-
          if (Math.abs(l.start.x - lessonParams.l6_x) < 0.1 && Math.abs(l.start.y - lessonParams.l6_y) < 0.1 && Math.abs(len - lessonParams.l6_len) < 0.1 && Math.abs(actualAng - targetAng) < 1) {
             passed = true;
          }
@@ -180,6 +177,12 @@ function App() {
          const hasOriginal = circles.some(c => Math.abs(c.radius - lessonParams.l7_r) < 0.1);
          const hasOffset = circles.some(c => Math.abs(c.radius - (lessonParams.l7_r + lessonParams.l7_dist)) < 0.1);
          if (hasOriginal && hasOffset) passed = true;
+      }
+    } else if (currentLesson === 8) {
+      const rects = entities.filter(e => e.type === 'RECTANGLE') as any[];
+      if (rects.length >= 1) {
+         const r = rects[0];
+         if (r.filletRadius && Math.abs(r.filletRadius - lessonParams.l8_radius) < 0.1) passed = true;
       }
     }
 
@@ -219,20 +222,26 @@ function App() {
           </button>
         </div>
         <div className="ribbon-group">
+          <button className={`ribbon-button ${activeCommand === 'MIRROR' ? 'active' : ''}`} onClick={() => handleCommandClick('MIRROR')}>
+            <Monitor size={20} /><span>Mirror</span>
+          </button>
+          <button className={`ribbon-button ${activeCommand === 'OFFSET' ? 'active' : ''}`} onClick={() => handleCommandClick('OFFSET')}>
+            <Layers size={20} /><span>Offset</span>
+          </button>
+          <button className={`ribbon-button ${activeCommand === 'FILLET' ? 'active' : ''}`} onClick={() => handleCommandClick('FILLET')}>
+            <Crop size={20} /><span>Fillet</span>
+          </button>
+          <button className={`ribbon-button ${activeCommand === 'CHAMFER' ? 'active' : ''}`} onClick={() => handleCommandClick('CHAMFER')}>
+            <Square size={20} /><span>Chamfer</span>
+          </button>
+        </div>
+        <div className="ribbon-group">
           <button className={`ribbon-button ${activeCommand === 'ROTATE' ? 'active' : ''}`} onClick={() => handleCommandClick('ROTATE')}>
             <RotateCw size={20} /><span>Rotate</span>
           </button>
           <button className={`ribbon-button ${activeCommand === 'SCALE' ? 'active' : ''}`} onClick={() => handleCommandClick('SCALE')}>
             <Maximize size={20} /><span>Scale</span>
           </button>
-          <button className={`ribbon-button ${activeCommand === 'MIRROR' ? 'active' : ''}`} onClick={() => handleCommandClick('MIRROR')}>
-            <FlipHorizontal size={20} /><span>Mirror</span>
-          </button>
-          <button className={`ribbon-button ${activeCommand === 'OFFSET' ? 'active' : ''}`} onClick={() => handleCommandClick('OFFSET')}>
-            <Layers size={20} /><span>Offset</span>
-          </button>
-        </div>
-        <div className="ribbon-group">
           <button className={`ribbon-button ${activeCommand === 'PAN' ? 'active' : ''}`} onClick={() => handleCommandClick('PAN')}>
             <MousePointer2 size={20} /><span>Pan</span>
           </button>
@@ -256,8 +265,8 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <button onClick={() => { setCurrentLesson(Math.max(1, currentLesson - 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
-            <span>บทเรียน (Lesson {currentLesson}/7)</span>
-            <button onClick={() => { setCurrentLesson(Math.min(7, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            <span>บทเรียน (Lesson {currentLesson}/8)</span>
+            <button onClick={() => { setCurrentLesson(Math.min(8, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
           <div className="sidebar-content">
@@ -370,6 +379,19 @@ function App() {
                   <li>พิมพ์ระยะห่าง <code>{lessonParams.l7_dist}</code> แล้วกด Enter</li>
                   <li>คลิกที่เส้นขอบวงกลม แล้วเลื่อนเมาส์ออกมาคลิกด้านนอกวงกลม</li>
                   <li>ระบบจะสร้างวงกลมใหม่ที่ขยายใหญ่ขึ้น (รัศมี {lessonParams.l7_r + lessonParams.l7_dist})</li>
+                </ol>
+              </>
+            )}
+
+            {currentLesson === 8 && (
+              <>
+                <h3>บทที่ 8: การลบมุมโค้งและตัดมุม (FILLET & CHAMFER)</h3>
+                <p>เรียนรู้การตกแต่งมุมของวัตถุด้วย <strong>FILLET</strong> (มุมโค้ง) และ <strong>CHAMFER</strong> (มุมเหลี่ยม)</p>
+                <ol>
+                  <li>พิมพ์ <code>REC</code> สร้างสี่เหลี่ยม <code>{lessonParams.l8_rectX},{lessonParams.l8_rectY}</code> ขนาด <code>@{lessonParams.l8_rectW},{lessonParams.l8_rectH}</code></li>
+                  <li>พิมพ์ <code>F</code> (FILLET) หรือคลิกปุ่ม Fillet</li>
+                  <li>ระบบจะถามระยะ รัศมี (Radius) ให้พิมพ์ <code>{lessonParams.l8_radius}</code> แล้วกด Enter</li>
+                  <li>นำเมาส์ไปคลิกที่เส้นขอบของสี่เหลี่ยม เพื่อลบมุมโค้งทุกมุมพร้อมกัน!</li>
                 </ol>
               </>
             )}
