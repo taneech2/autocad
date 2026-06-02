@@ -10,9 +10,11 @@ export interface Rectangle extends BaseEntity { type: 'RECTANGLE'; p1: Point; p2
 export interface Arc extends BaseEntity { type: 'ARC'; start: Point; control: Point; end: Point; radius: number; }
 export interface Text extends BaseEntity { type: 'TEXT'; start: Point; text: string; height: number; }
 export interface Dimension extends BaseEntity { type: 'DIMENSION'; p1: Point; p2: Point; dimLinePos: Point; text: string; }
+export interface DimAligned extends BaseEntity { type: 'DIM_ALIGNED'; p1: Point; p2: Point; dimLinePos: Point; text: string; }
+export interface DimAngular extends BaseEntity { type: 'DIM_ANGULAR'; center: Point; p1: Point; p2: Point; dimLinePos: Point; text: string; }
 export interface Polygon extends BaseEntity { type: 'POLYGON'; center: Point; radius: number; sides: number; }
 export interface CircularArc extends BaseEntity { type: 'CIRCULAR_ARC'; center: Point; radius: number; startAngle: number; endAngle: number; }
-export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension | Polygon | CircularArc;
+export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension | DimAligned | DimAngular | Polygon | CircularArc;
 
 interface DrawingCanvasProps {
   activeCommand: string | null;
@@ -300,6 +302,15 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       if (commandStep === 0) onPromptChange(`DIMENSION Specify first extension line origin:`);
       else if (commandStep === 1) onPromptChange(`DIMENSION Specify second extension line origin:`);
       else if (commandStep === 2) onPromptChange(`DIMENSION Specify dimension line location:`);
+    } else if (activeCommand === 'DIMALIGNED') {
+      if (commandStep === 0) onPromptChange(`DIMALIGNED Specify first extension line origin:`);
+      else if (commandStep === 1) onPromptChange(`DIMALIGNED Specify second extension line origin:`);
+      else if (commandStep === 2) onPromptChange(`DIMALIGNED Specify dimension line location:`);
+    } else if (activeCommand === 'DIMANGULAR') {
+      if (commandStep === 0) onPromptChange(`DIMANGULAR Specify angle vertex:`);
+      else if (commandStep === 1) onPromptChange(`DIMANGULAR Specify first angle endpoint:`);
+      else if (commandStep === 2) onPromptChange(`DIMANGULAR Specify second angle endpoint:`);
+      else if (commandStep === 3) onPromptChange(`DIMANGULAR Specify dimension arc line location:`);
     } else if (activeCommand === 'EXTEND') {
       onPromptChange(`EXTEND Select object to extend:`);
     } else if (activeCommand === 'STRETCH') {
@@ -793,6 +804,92 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.fillText(entity.text, midX, -midY - 0.5);
+        ctx.restore();
+      } else if (entity.type === 'DIM_ALIGNED') {
+        ctx.beginPath();
+        
+        const dx = entity.p2.x - entity.p1.x;
+        const dy = entity.p2.y - entity.p1.y;
+        const len = Math.sqrt(dx*dx + dy*dy);
+        if (len > 0) {
+           const ux = dx / len;
+           const uy = dy / len;
+           
+           // Vector from p1 to dimLinePos
+           const vx = entity.dimLinePos.x - entity.p1.x;
+           const vy = entity.dimLinePos.y - entity.p1.y;
+           
+           // Project v onto u
+           const projLength = vx * ux + vy * uy;
+           const projX = entity.p1.x + projLength * ux;
+           const projY = entity.p1.y + projLength * uy;
+           
+           // Normal vector from projected point to dimLinePos
+           const nx = entity.dimLinePos.x - projX;
+           const ny = entity.dimLinePos.y - projY;
+           
+           const d1 = { x: entity.p1.x + nx, y: entity.p1.y + ny };
+           const d2 = { x: entity.p2.x + nx, y: entity.p2.y + ny };
+           
+           ctx.moveTo(entity.p1.x, entity.p1.y); ctx.lineTo(d1.x, d1.y);
+           ctx.moveTo(entity.p2.x, entity.p2.y); ctx.lineTo(d2.x, d2.y);
+           ctx.moveTo(d1.x, d1.y); ctx.lineTo(d2.x, d2.y);
+           ctx.stroke();
+           
+           ctx.save();
+           const midX = (d1.x + d2.x) / 2;
+           const midY = (d1.y + d2.y) / 2;
+           ctx.translate(midX, midY);
+           let angle = Math.atan2(dy, dx);
+           if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
+           ctx.rotate(angle);
+           ctx.scale(1, -1);
+           ctx.font = `1.5px Consolas`;
+           ctx.fillStyle = isSelected ? '#3399ff' : '#00ffaa';
+           ctx.textAlign = 'center';
+           ctx.textBaseline = 'bottom';
+           ctx.fillText(entity.text, 0, -0.5);
+           ctx.restore();
+        }
+      } else if (entity.type === 'DIM_ANGULAR') {
+        const r = distance(entity.center, entity.dimLinePos);
+        let a1 = Math.atan2(entity.p1.y - entity.center.y, entity.p1.x - entity.center.x);
+        let a2 = Math.atan2(entity.p2.y - entity.center.y, entity.p2.x - entity.center.x);
+        
+        ctx.beginPath();
+        // Draw extension lines
+        const maxDist = Math.max(distance(entity.center, entity.p1), distance(entity.center, entity.p2), r * 1.2);
+        ctx.moveTo(entity.center.x, entity.center.y);
+        ctx.lineTo(entity.center.x + Math.cos(a1) * maxDist, entity.center.y + Math.sin(a1) * maxDist);
+        ctx.moveTo(entity.center.x, entity.center.y);
+        ctx.lineTo(entity.center.x + Math.cos(a2) * maxDist, entity.center.y + Math.sin(a2) * maxDist);
+        
+        // Ensure arc goes the shortest way or follows the click
+        let startA = a1 < 0 ? a1 + 2*Math.PI : a1;
+        let endA = a2 < 0 ? a2 + 2*Math.PI : a2;
+        let clickA = Math.atan2(entity.dimLinePos.y - entity.center.y, entity.dimLinePos.x - entity.center.x);
+        if (clickA < 0) clickA += 2*Math.PI;
+        
+        // Determine whether to draw clockwise or counterclockwise based on click point
+        let inArc = false;
+        if (startA < endA) {
+           inArc = clickA >= startA && clickA <= endA;
+        } else {
+           inArc = clickA >= startA || clickA <= endA;
+        }
+        
+        ctx.arc(entity.center.x, entity.center.y, r, startA, endA, !inArc);
+        ctx.stroke();
+        
+        ctx.save();
+        ctx.scale(1, -1);
+        ctx.font = `1.5px Consolas`;
+        ctx.fillStyle = isSelected ? '#3399ff' : '#00ffaa';
+        const textX = entity.center.x + Math.cos(clickA) * (r + 1.5);
+        const textY = entity.center.y + Math.sin(clickA) * (r + 1.5);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(entity.text + "°", textX, -textY);
         ctx.restore();
       }
       ctx.setLineDash([]); 
@@ -1638,6 +1735,60 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
             const dimLinePos = input;
             const dist = Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)).toFixed(2);
             setEntities(prev => [...prev, { id: generateId(), type: 'DIMENSION', p1, p2, dimLinePos, text: dist }]);
+            onCommandComplete();
+        }
+    } else if (activeCommand === 'DIMALIGNED') {
+        if (commandStep === 0 && typeof input === 'object' && 'x' in input) {
+            setTempPoints([input]);
+            setCommandStep(1);
+        } else if (commandStep === 1 && typeof input === 'object' && 'x' in input) {
+            setTempPoints(prev => [...prev, input]);
+            setCommandStep(2);
+        } else if (commandStep === 2 && typeof input === 'object' && 'x' in input) {
+            const p1 = tempPoints[0];
+            const p2 = tempPoints[1];
+            const dimLinePos = input;
+            const dist = distance(p1, p2).toFixed(2);
+            setEntities(prev => [...prev, { id: generateId(), type: 'DIM_ALIGNED', p1, p2, dimLinePos, text: dist }]);
+            onCommandComplete();
+        }
+    } else if (activeCommand === 'DIMANGULAR') {
+        if (commandStep === 0 && typeof input === 'object' && 'x' in input) {
+            setTempPoints([input]);
+            setCommandStep(1);
+        } else if (commandStep === 1 && typeof input === 'object' && 'x' in input) {
+            setTempPoints(prev => [...prev, input]);
+            setCommandStep(2);
+        } else if (commandStep === 2 && typeof input === 'object' && 'x' in input) {
+            setTempPoints(prev => [...prev, input]);
+            setCommandStep(3);
+        } else if (commandStep === 3 && typeof input === 'object' && 'x' in input) {
+            const center = tempPoints[0];
+            const p1 = tempPoints[1];
+            const p2 = tempPoints[2];
+            const dimLinePos = input;
+            
+            const a1 = Math.atan2(p1.y - center.y, p1.x - center.x);
+            const a2 = Math.atan2(p2.y - center.y, p2.x - center.x);
+            let diff = Math.abs(a1 - a2) * (180 / Math.PI);
+            
+            // Adjust diff based on click point
+            let startA = a1 < 0 ? a1 + 2*Math.PI : a1;
+            let endA = a2 < 0 ? a2 + 2*Math.PI : a2;
+            let clickA = Math.atan2(dimLinePos.y - center.y, dimLinePos.x - center.x);
+            if (clickA < 0) clickA += 2*Math.PI;
+            
+            let inArc = false;
+            if (startA < endA) {
+               inArc = clickA >= startA && clickA <= endA;
+            } else {
+               inArc = clickA >= startA || clickA <= endA;
+            }
+            if (!inArc) {
+                diff = 360 - diff;
+            }
+            
+            setEntities(prev => [...prev, { id: generateId(), type: 'DIM_ANGULAR', center, p1, p2, dimLinePos, text: diff.toFixed(1) }]);
             onCommandComplete();
         }
     }

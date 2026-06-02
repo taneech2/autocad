@@ -145,6 +145,8 @@ function App() {
         else if (input === 'AR' || input === 'ARRAY') handleCommandClick('ARRAY');
         else if (input === 'T' || input === 'TEXT') handleCommandClick('TEXT');
         else if (input === 'DLI' || input === 'DIMENSION') handleCommandClick('DIMENSION');
+        else if (input === 'DAL' || input === 'DIMALIGNED') handleCommandClick('DIMALIGNED');
+        else if (input === 'DAN' || input === 'DIMANGULAR') handleCommandClick('DIMANGULAR');
         else if (input === 'P' || input === 'PAN') handleCommandClick('PAN');
         else if (input === 'U' || input === 'UNDO') handleCommandClick('UNDO');
         else if (input === 'EX' || input === 'EXTEND') handleCommandClick('EXTEND');
