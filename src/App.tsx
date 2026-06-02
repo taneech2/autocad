@@ -63,6 +63,22 @@ function App() {
   const historyEndRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<DrawingCanvasHandle>(null);
   const timerRef = useRef<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key.length === 1 && 
+        !e.ctrlKey && !e.metaKey && !e.altKey &&
+        document.activeElement?.tagName !== 'INPUT' && 
+        document.activeElement?.tagName !== 'TEXTAREA'
+      ) {
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   useEffect(() => {
     historyEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -568,6 +584,7 @@ function App() {
         <div className="command-input-container">
           <span className="command-prompt">{prompt}</span>
           <input 
+            ref={inputRef}
             type="text" 
             className="command-input" 
             autoFocus
