@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, Layers, Monitor, Crop } from 'lucide-react';
+import { Crosshair, MousePointer2, Move, Type, Circle as CircleIcon, Square, PenTool, Scissors, Copy, Maximize, RotateCw, RefreshCw, ZoomIn, Info, ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import DrawingCanvas, { type DrawingCanvasHandle } from './DrawingCanvas';
 import './App.css';
 
