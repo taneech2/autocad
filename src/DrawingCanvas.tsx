@@ -114,7 +114,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
   // Drawing state
   const [entities, _setEntities] = useState<Entity[]>([]);
-  const [history, setHistory] = useState<Entity[][]>([]);
+  const [, setHistory] = useState<Entity[][]>([]);
   const [cursorPos, setCursorPos] = useState<Point>({ x: 0, y: 0 });
 
   const setEntities = (action: React.SetStateAction<Entity[]>) => {
