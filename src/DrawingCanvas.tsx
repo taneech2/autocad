@@ -191,6 +191,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
       if (e.key === 'Escape') {
         if (activeCommand === 'LINE' && commandStep === 1) {
           onCommandComplete();
@@ -203,7 +207,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         }
       }
       
-      if (e.key === 'Delete' && selectedIds.size > 0) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0) {
         setEntities(prev => prev.filter(e => !selectedIds.has(e.id)));
         setSelectedIds(new Set());
       }
