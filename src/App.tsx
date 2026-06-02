@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, Layers, Monitor, Crop, Type, ChevronsRight, MoveHorizontal } from 'lucide-react';
+import { Play, Square, Circle, PenTool, MousePointer2, Move, Copy, Scissors, ChevronLeft, ChevronRight, Clock, Trophy, RotateCw, Maximize, Layers, Monitor, Crop, Type, ChevronsRight, MoveHorizontal, Hexagon } from 'lucide-react';
 import DrawingCanvas, { type DrawingCanvasHandle } from './DrawingCanvas';
 import './App.css';
 
@@ -18,6 +18,8 @@ interface LessonParams {
   l9_circX: number; l9_circY: number; l9_circR: number; l9_cols: number; l9_rows: number; l9_dist: number;
   l10_textX: number; l10_textY: number; l10_textStr: string;
   l11_lineX: number; l11_lineY: number;
+  l12_sides: number;
+  l12_radius: number;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -34,7 +36,9 @@ const generateRandomParams = (): LessonParams => {
     l8_rectX: randInt(-5, -2), l8_rectY: randInt(-5, -2), l8_rectW: randInt(5, 8), l8_rectH: randInt(5, 8), l8_radius: randInt(1, 2),
     l9_circX: randInt(-8, -4), l9_circY: randInt(-8, -4), l9_circR: randInt(1, 2), l9_cols: randInt(2, 4), l9_rows: randInt(2, 4), l9_dist: randInt(3, 5),
     l10_textX: randInt(2, 5), l10_textY: randInt(2, 5), l10_textStr: ["AUTO", "CAD", "DRAW", "LINE"][randInt(0, 3)],
-    l11_lineX: randInt(-4, 4), l11_lineY: randInt(-4, 4)
+    l11_lineX: randInt(-4, 4), l11_lineY: randInt(-4, 4),
+    l12_sides: randInt(5, 8),
+    l12_radius: randInt(3, 5)
   };
 };
 
@@ -125,6 +129,7 @@ function App() {
         else if (input === 'U' || input === 'UNDO') handleCommandClick('UNDO');
         else if (input === 'EX' || input === 'EXTEND') handleCommandClick('EXTEND');
         else if (input === 'S' || input === 'STRETCH') handleCommandClick('STRETCH');
+        else if (input === 'POL' || input === 'POLYGON') handleCommandClick('POLYGON');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
         if (input === '') setTypedInputToProcess('ENTER_KEY');
@@ -215,6 +220,14 @@ function App() {
       const extendedLines = lines.filter(l => l.end.x === 5 && l.end.y === 0 && l.start.x === 0 && l.start.y === 0);
       const stretchedLines = lines.filter(l => (l.start.x === 2 && l.start.y === -2 && l.end.x === 2 && l.end.y === 0) || (l.start.x === 2 && l.start.y === 0 && l.end.x === 2 && l.end.y === -2));
       if (extendedLines.length >= 1 || stretchedLines.length >= 1) passed = true;
+    } else if (currentLesson === 12) {
+      const polygons = entities.filter(e => e.type === 'POLYGON') as any[];
+      if (polygons.length > 0) {
+        const poly = polygons[0];
+        if (poly.sides === lessonParams.l12_sides && Math.abs(poly.radius - lessonParams.l12_radius) < 0.1) {
+           passed = true;
+        }
+      }
     }
 
     if (passed) {
@@ -222,7 +235,7 @@ function App() {
       setScore(prev => prev + points);
       setIsTimerRunning(false);
       alert(`ยอดเยี่ยม! ภารกิจสำเร็จ คุณได้รับ ${points} คะแนน (เหลือเวลา ${timeLeft} วินาที)`);
-      if (currentLesson < 11) setCurrentLesson(c => c + 1);
+      if (currentLesson < 12) setCurrentLesson(c => c + 1);
     } else {
       alert("ยังไม่ถูกต้อง ลองตรวจสอบพิกัดและวาดตามโจทย์ให้ครบถ้วนดูอีกครั้งนะครับ");
     }
@@ -295,6 +308,12 @@ function App() {
             <MousePointer2 size={20} /><span>Pan</span>
           </button>
         </div>
+        <div className="ribbon-group">
+          <div className="ribbon-group-title">Advanced</div>
+          <button className={`ribbon-button ${activeCommand === 'POLYGON' ? 'active' : ''}`} onClick={() => handleCommandClick('POLYGON')}>
+            <Hexagon size={20} /><span>Polygon</span>
+          </button>
+        </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', color: '#888', fontSize: '12px', paddingRight: '10px' }}>
           <span>สร้างโดยครูธานี ชมสุข</span>
         </div>
@@ -322,7 +341,7 @@ function App() {
               onChange={(e) => { setCurrentLesson(Number(e.target.value)); stopChallenge(); }}
               style={{ background: '#252526', color: 'white', border: '1px solid #3e3e42', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', outline: 'none', flexGrow: 1, margin: '0 10px', textAlign: 'center' }}
             >
-              {[...Array(11)].map((_, i) => (
+              {[...Array(12)].map((_, i) => (
                 <option key={i+1} value={i+1}>บทเรียนที่ {i+1}</option>
               ))}
             </select>
@@ -497,6 +516,19 @@ function App() {
                   <li>วาดเส้นตรง (LINE) จาก <code>2,-2</code> ไปที่ <code>2,-1</code></li>
                   <li>พิมพ์ <code>EX</code> แล้วเว้นวรรค 1 ครั้ง</li>
                   <li>คลิกที่ปลายเส้นเส้นที่ 2 ด้านบน เพื่อยืดเส้นไปชนเส้นขอบที่ (2,0)</li>
+                </ol>
+              </>
+            )}
+
+            {currentLesson === 12 && (
+              <>
+                <h3>บทที่ 12: การวาดรูปหลายเหลี่ยม (POLYGON)</h3>
+                <p>คำสั่ง <strong>POLYGON (POL)</strong> ใช้สำหรับสร้างรูปหลายเหลี่ยมด้านเท่า</p>
+                <ol>
+                  <li>พิมพ์ <code>POL</code> แล้วเว้นวรรค 1 ครั้ง</li>
+                  <li>พิมพ์จำนวนด้าน <code>{lessonParams.l12_sides}</code> กด Enter</li>
+                  <li>คลิกเลือกจุดศูนย์กลางบนพื้นที่วาด</li>
+                  <li>พิมพ์รัศมีวงกลม <code>{lessonParams.l12_radius}</code> กด Enter</li>
                 </ol>
               </>
             )}

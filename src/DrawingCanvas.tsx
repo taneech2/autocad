@@ -10,7 +10,8 @@ export interface Rectangle extends BaseEntity { type: 'RECTANGLE'; p1: Point; p2
 export interface Arc extends BaseEntity { type: 'ARC'; start: Point; control: Point; end: Point; radius: number; }
 export interface Text extends BaseEntity { type: 'TEXT'; start: Point; text: string; height: number; }
 export interface Dimension extends BaseEntity { type: 'DIMENSION'; p1: Point; p2: Point; dimLinePos: Point; text: string; }
-export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension;
+export interface Polygon extends BaseEntity { type: 'POLYGON'; center: Point; radius: number; sides: number; }
+export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension | Polygon;
 
 interface DrawingCanvasProps {
   activeCommand: string | null;
@@ -199,6 +200,29 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       return;
     }
 
+    if (activeCommand === 'POLYGON') {
+       if (commandStep === 0) {
+          const s = Number(input);
+          if (!isNaN(s) && s >= 3) {
+             setTypedInputToProcess(s);
+             setCommandStep(1);
+          } else {
+             onPromptChange('POLYGON Requires an integer between 3 and 1024');
+             setTimeout(() => setCommandStep(s => s), 2000);
+          }
+       } else if (commandStep === 1) {
+          setTempPoints([typeof input === 'object' ? input as Point : {x:0, y:0}]);
+          setCommandStep(2);
+       } else if (commandStep === 2) {
+          const center = tempPoints[0];
+          const r = typeof input === 'number' ? input : distance(center, input as Point);
+          const sides = typeof typedInput === 'number' ? typedInput : Number(typedInput) || 5;
+          setEntities(prev => [...prev, { id: generateId(), type: 'POLYGON', center: center, radius: r, sides: sides }]);
+          onCommandComplete();
+       }
+       return;
+    }
+
     if (activeCommand === 'LINE') {
       if (commandStep === 0) onPromptChange('LINE Specify first point:');
       else if (commandStep === 1) onPromptChange('LINE Specify next point or [Undo/Close]:');
@@ -252,6 +276,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       else if (commandStep === 1) onPromptChange(`STRETCH Select opposite corner:`);
       else if (commandStep === 2) onPromptChange(`STRETCH Specify base point:`);
       else if (commandStep === 3) onPromptChange(`STRETCH Specify second point:`);
+    } else if (activeCommand === 'POLYGON') {
+      if (commandStep === 0) onPromptChange(`POLYGON Enter number of sides:`);
+      else if (commandStep === 1) onPromptChange(`POLYGON Specify center of polygon:`);
+      else if (commandStep === 2) onPromptChange(`POLYGON Specify radius of circle:`);
     }
   }, [activeCommand, commandStep, selectedIds.size, onPromptChange]);
 
@@ -310,6 +338,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       } else if (entity.type === 'CIRCLE') {
         const d = distance(worldPos, entity.center);
         if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
+      } else if (entity.type === 'POLYGON') {
+        const d = distance(worldPos, entity.center);
+        if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
       }
     });
 
@@ -329,6 +360,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         const d = distanceToLineSegment(worldPos, entity.start, entity.end);
         if (d < minDist) { minDist = d; bestEntityId = entity.id; }
       } else if (entity.type === 'CIRCLE') {
+        const d = distance(worldPos, entity.center);
+        if (d <= entity.radius + pickDistance) { minDist = 0; bestEntityId = entity.id; }
+      } else if (entity.type === 'POLYGON') {
         const d = distance(worldPos, entity.center);
         if (d <= entity.radius + pickDistance) { minDist = 0; bestEntityId = entity.id; }
       } else if (entity.type === 'RECTANGLE') {
@@ -546,6 +580,16 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         ctx.beginPath();
         ctx.arc(entity.center.x, entity.center.y, entity.radius, 0, 2 * Math.PI);
         ctx.stroke();
+      } else if (entity.type === 'POLYGON') {
+        const angleStep = (Math.PI * 2) / entity.sides;
+        ctx.beginPath();
+        for (let i = 0; i <= entity.sides; i++) {
+          const ptX = entity.center.x + entity.radius * Math.cos(i * angleStep);
+          const ptY = entity.center.y + entity.radius * Math.sin(i * angleStep);
+          if (i === 0) ctx.moveTo(ptX, ptY);
+          else ctx.lineTo(ptX, ptY);
+        }
+        ctx.stroke();
       } else if (entity.type === 'ARC') {
         ctx.beginPath();
         ctx.moveTo(entity.start.x, entity.start.y);
@@ -656,6 +700,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
           if (entity.type === 'LINE') drawEntity(ctx, { ...entity, start: {x: entity.start.x + dx, y: entity.start.y + dy}, end: {x: entity.end.x + dx, y: entity.end.y + dy} }, false, true);
           else if (entity.type === 'CIRCLE') drawEntity(ctx, { ...entity, center: {x: entity.center.x + dx, y: entity.center.y + dy} }, false, true);
           else if (entity.type === 'RECTANGLE') drawEntity(ctx, { ...entity, p1: {x: entity.p1.x + dx, y: entity.p1.y + dy}, p2: {x: entity.p2.x + dx, y: entity.p2.y + dy} }, false, true);
+          else if (entity.type === 'POLYGON') drawEntity(ctx, { ...entity, center: {x: entity.center.x + dx, y: entity.center.y + dy} }, false, true);
         });
       } else if (activeCommand === 'STRETCH' && commandStep === 1 && tempPoints.length > 0) {
         ctx.strokeStyle = '#00ffaa'; 
@@ -681,6 +726,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
             }
           }
         });
+      } else if (activeCommand === 'POLYGON' && commandStep === 2 && tempPoints.length > 0) {
+        const center = tempPoints[0];
+        const r = distance(center, cursorPos);
+        const sides = Number(typedInput) || 5; 
+        drawEntity(ctx, { id: 'preview', type: 'POLYGON', center: center, radius: r, sides: sides }, false, true);
       } else if (commandStep === 2 && tempPoints.length > 0) {
          const origin = tempPoints[0];
          if (activeCommand === 'ROTATE') {
