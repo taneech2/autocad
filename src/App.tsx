@@ -20,6 +20,8 @@ interface LessonParams {
   l11_lineX: number; l11_lineY: number;
   l12_sides: number;
   l12_radius: number;
+  l12_centerX: number;
+  l12_centerY: number;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -38,7 +40,9 @@ const generateRandomParams = (): LessonParams => {
     l10_textX: randInt(2, 5), l10_textY: randInt(2, 5), l10_textStr: ["AUTO", "CAD", "DRAW", "LINE"][randInt(0, 3)],
     l11_lineX: randInt(-4, 4), l11_lineY: randInt(-4, 4),
     l12_sides: randInt(5, 8),
-    l12_radius: randInt(3, 5)
+    l12_radius: randInt(3, 5),
+    l12_centerX: randInt(-3, 3),
+    l12_centerY: randInt(-3, 3)
   };
 };
 
@@ -224,7 +228,7 @@ function App() {
       const polygons = entities.filter(e => e.type === 'POLYGON') as any[];
       if (polygons.length > 0) {
         const poly = polygons[0];
-        if (poly.sides === lessonParams.l12_sides && Math.abs(poly.radius - lessonParams.l12_radius) < 0.1) {
+        if (poly.sides === lessonParams.l12_sides && Math.abs(poly.radius - lessonParams.l12_radius) < 0.1 && poly.center.x === lessonParams.l12_centerX && poly.center.y === lessonParams.l12_centerY) {
            passed = true;
         }
       }
@@ -527,7 +531,7 @@ function App() {
                 <ol>
                   <li>พิมพ์ <code>POL</code> แล้วเว้นวรรค 1 ครั้ง</li>
                   <li>พิมพ์จำนวนด้าน <code>{lessonParams.l12_sides}</code> กด Enter</li>
-                  <li>คลิกเลือกจุดศูนย์กลางบนพื้นที่วาด</li>
+                  <li>พิมพ์พิกัดจุดศูนย์กลาง <code>{lessonParams.l12_centerX},{lessonParams.l12_centerY}</code> กด Enter</li>
                   <li>พิมพ์รัศมีวงกลม <code>{lessonParams.l12_radius}</code> กด Enter</li>
                 </ol>
               </>
