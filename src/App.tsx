@@ -291,7 +291,15 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <button onClick={() => { setCurrentLesson(Math.max(1, currentLesson - 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronLeft size={18} /></button>
-            <span>บทเรียน (Lesson {currentLesson}/10)</span>
+            <select 
+              value={currentLesson} 
+              onChange={(e) => { setCurrentLesson(Number(e.target.value)); stopChallenge(); }}
+              style={{ background: '#252526', color: 'white', border: '1px solid #3e3e42', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', outline: 'none', flexGrow: 1, margin: '0 10px', textAlign: 'center' }}
+            >
+              {[...Array(10)].map((_, i) => (
+                <option key={i+1} value={i+1}>บทเรียนที่ {i+1}</option>
+              ))}
+            </select>
             <button onClick={() => { setCurrentLesson(Math.min(10, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
