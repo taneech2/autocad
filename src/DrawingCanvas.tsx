@@ -72,8 +72,8 @@ const getRaySegmentIntersection = (rayOrigin: Point, rayDir: {x: number, y: numb
   const det = v3 * rayDir.y - v4 * rayDir.x;
   if (Math.abs(det) < 1e-6) return null;
 
-  const t = (v3 * v2 - v4 * v1) / det;
-  const u = (rayDir.x * v2 - rayDir.y * v1) / det;
+  const t = (v1 * v4 - v3 * v2) / det;
+  const u = (v1 * rayDir.y - v2 * rayDir.x) / det;
 
   if (t > 1e-5 && u >= -1e-5 && u <= 1.00001) {
     return { x: rayOrigin.x + t * rayDir.x, y: rayOrigin.y + t * rayDir.y };
