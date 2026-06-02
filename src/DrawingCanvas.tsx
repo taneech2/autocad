@@ -550,7 +550,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
             ctx.lineTo(minX, minY + d);
             ctx.closePath();
         } else {
-            ctx.rect(entity.p1.x, entity.p1.y, w, h);
+            ctx.rect(minX, minY, w, h);
         }
         ctx.stroke();
       } else if (entity.type === 'CIRCLE') {
