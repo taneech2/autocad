@@ -200,29 +200,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       return;
     }
 
-    if (activeCommand === 'POLYGON') {
-       if (commandStep === 0) {
-          const s = Number(input);
-          if (!isNaN(s) && s >= 3) {
-             setTypedInputToProcess(s);
-             setCommandStep(1);
-          } else {
-             onPromptChange('POLYGON Requires an integer between 3 and 1024');
-             setTimeout(() => setCommandStep(s => s), 2000);
-          }
-       } else if (commandStep === 1) {
-          setTempPoints([typeof input === 'object' ? input as Point : {x:0, y:0}]);
-          setCommandStep(2);
-       } else if (commandStep === 2) {
-          const center = tempPoints[0];
-          const r = typeof input === 'number' ? input : distance(center, input as Point);
-          const sides = typeof typedInput === 'number' ? typedInput : Number(typedInput) || 5;
-          setEntities(prev => [...prev, { id: generateId(), type: 'POLYGON', center: center, radius: r, sides: sides }]);
-          onCommandComplete();
-       }
-       return;
-    }
-
     if (activeCommand === 'LINE') {
       if (commandStep === 0) onPromptChange('LINE Specify first point:');
       else if (commandStep === 1) onPromptChange('LINE Specify next point or [Undo/Close]:');
@@ -1066,19 +1043,21 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
        if (commandStep === 0) {
           const s = Number(input);
           if (!isNaN(s) && s >= 3) {
-             setTypedInputToProcess(s as any);
+             // temporarily store sides in a hacky way in typedInput if we don't have state, but let's just use it from temp array.
+             // Actually, we can use a new state, but for now we can store it in tempPoints as a Point {x:s, y:s}
+             setTempPoints([{x: s, y: s}]);
              setCommandStep(1);
           } else {
              onPromptChange('POLYGON Requires an integer between 3 and 1024');
              setTimeout(() => setCommandStep(s => s), 2000);
           }
        } else if (commandStep === 1) {
-          setTempPoints([typeof input === 'object' ? input as Point : {x:0, y:0}]);
+          setTempPoints(prev => [...prev, typeof input === 'object' ? input as Point : {x:0, y:0}]);
           setCommandStep(2);
        } else if (commandStep === 2) {
-          const center = tempPoints[0];
+          const sides = tempPoints[0].x; // retrieve sides from our hacky storage
+          const center = tempPoints[1];
           const r = typeof input === 'number' ? input : distance(center, input as Point);
-          const sides = typeof typedInputToProcess === 'number' ? typedInputToProcess : Number(typedInputToProcess) || 5;
           setEntities(prev => [...prev, { id: generateId(), type: 'POLYGON', center: center, radius: r, sides: sides }]);
           onCommandComplete();
        }
