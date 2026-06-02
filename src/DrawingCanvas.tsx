@@ -7,7 +7,8 @@ export interface BaseEntity { id: string; }
 export interface Line extends BaseEntity { type: 'LINE'; start: Point; end: Point; }
 export interface Circle extends BaseEntity { type: 'CIRCLE'; center: Point; radius: number; }
 export interface Rectangle extends BaseEntity { type: 'RECTANGLE'; p1: Point; p2: Point; filletRadius?: number; chamferDist?: number; }
-export type Entity = Line | Circle | Rectangle;
+export interface Arc extends BaseEntity { type: 'ARC'; start: Point; control: Point; end: Point; radius: number; }
+export type Entity = Line | Circle | Rectangle | Arc;
 
 interface DrawingCanvasProps {
   activeCommand: string | null;
@@ -162,10 +163,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       else if (commandStep === 2) onPromptChange(`OFFSET Specify point on side to offset:`);
     } else if (activeCommand === 'FILLET') {
       if (commandStep === 0) onPromptChange(`FILLET Specify fillet radius:`);
-      else if (commandStep === 1) onPromptChange(`FILLET Select rectangle to fillet:`);
+      else if (commandStep === 1) onPromptChange(`FILLET Select first object (Rectangle or Line):`);
+      else if (commandStep === 2) onPromptChange(`FILLET Select second line:`);
     } else if (activeCommand === 'CHAMFER') {
       if (commandStep === 0) onPromptChange(`CHAMFER Specify chamfer distance:`);
-      else if (commandStep === 1) onPromptChange(`CHAMFER Select rectangle to chamfer:`);
+      else if (commandStep === 1) onPromptChange(`CHAMFER Select first object (Rectangle or Line):`);
+      else if (commandStep === 2) onPromptChange(`CHAMFER Select second line:`);
     }
   }, [activeCommand, commandStep, selectedIds.size, onPromptChange]);
 
@@ -394,6 +397,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       } else if (entity.type === 'CIRCLE') {
         ctx.beginPath();
         ctx.arc(entity.center.x, entity.center.y, entity.radius, 0, 2 * Math.PI);
+        ctx.stroke();
+      } else if (entity.type === 'ARC') {
+        ctx.beginPath();
+        ctx.moveTo(entity.start.x, entity.start.y);
+        ctx.arcTo(entity.control.x, entity.control.y, entity.end.x, entity.end.y, entity.radius);
         ctx.stroke();
       }
       ctx.setLineDash([]); 
@@ -902,7 +910,76 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                         }
                         return next;
                     });
+                    onCommandComplete();
+                } else if (target && target.type === 'LINE') {
+                    setSelectedIds(new Set([hitId]));
+                    setCommandStep(2);
                 }
+            }
+        } else if (commandStep === 2) {
+            if (typeof input !== 'object' || !('x' in input)) return;
+            const pt = input as Point;
+            const clickPos = rawWPos || pt;
+            const hitId = hitTest(clickPos);
+            if (hitId) {
+                const target2 = entities.find(e => e.id === hitId);
+                const target1Id = Array.from(selectedIds)[0];
+                const target1 = entities.find(e => e.id === target1Id);
+                if (target1 && target2 && target1.type === 'LINE' && target2.type === 'LINE' && target1.id !== target2.id) {
+                    const val = tempPoints[0].x;
+                    
+                    const p1 = target1.start, p2 = target1.end;
+                    const p3 = target2.start, p4 = target2.end;
+                    const denom = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+                    if (Math.abs(denom) > 1e-6) {
+                        const xi = ((p3.x - p4.x) * (p1.x * p2.y - p1.y * p2.x) - (p1.x - p2.x) * (p3.x * p4.y - p3.y * p4.x)) / denom;
+                        const yi = ((p3.y - p4.y) * (p1.x * p2.y - p1.y * p2.x) - (p1.y - p2.y) * (p3.x * p4.y - p3.y * p4.x)) / denom;
+                        const P = { x: xi, y: yi };
+                        
+                        const d1s = distance(P, target1.start);
+                        const d1e = distance(P, target1.end);
+                        const keep1 = d1s > d1e ? target1.start : target1.end;
+                        
+                        const d2s = distance(P, target2.start);
+                        const d2e = distance(P, target2.end);
+                        const keep2 = d2s > d2e ? target2.start : target2.end;
+                        
+                        const v1 = { x: keep1.x - P.x, y: keep1.y - P.y };
+                        const v2 = { x: keep2.x - P.x, y: keep2.y - P.y };
+                        const len1 = Math.hypot(v1.x, v1.y);
+                        const len2 = Math.hypot(v2.x, v2.y);
+                        
+                        if (len1 > 0 && len2 > 0) {
+                            const u = { x: v1.x / len1, y: v1.y / len1 };
+                            const v = { x: v2.x / len2, y: v2.y / len2 };
+                            const dotVal = Math.max(-1, Math.min(1, u.x * v.x + u.y * v.y));
+                            const theta = Math.acos(dotVal);
+                            
+                            if (theta > 0.01) {
+                                const d = activeCommand === 'FILLET' ? val / Math.tan(theta / 2) : val;
+                                const T1 = { x: P.x + u.x * d, y: P.y + u.y * d };
+                                const T2 = { x: P.x + v.x * d, y: P.y + v.y * d };
+                                
+                                setEntities(prev => {
+                                    const next = [...prev];
+                                    const idx1 = next.findIndex(e => e.id === target1.id);
+                                    const idx2 = next.findIndex(e => e.id === target2.id);
+                                    if (idx1 >= 0) next[idx1] = { ...target1, start: keep1, end: T1 };
+                                    if (idx2 >= 0) next[idx2] = { ...target2, start: keep2, end: T2 };
+                                    if (val > 0) {
+                                        if (activeCommand === 'FILLET') {
+                                            next.push({ id: generateId(), type: 'ARC', start: T1, control: P, end: T2, radius: val });
+                                        } else {
+                                            next.push({ id: generateId(), type: 'LINE', start: T1, end: T2 });
+                                        }
+                                    }
+                                    return next;
+                                });
+                            }
+                        }
+                    }
+                }
+                setSelectedIds(new Set());
                 onCommandComplete();
             }
         }
