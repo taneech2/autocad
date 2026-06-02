@@ -159,6 +159,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     } else if (activeCommand === 'OFFSET') {
       if (commandStep === 0) onPromptChange(`OFFSET Specify offset distance:`);
       else if (commandStep === 1) onPromptChange(`OFFSET Select object to offset:`);
+      else if (commandStep === 2) onPromptChange(`OFFSET Specify point on side to offset:`);
     }
   }, [activeCommand, commandStep, selectedIds.size, onPromptChange]);
 
@@ -735,40 +736,56 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         const clickPos = rawWPos || pt;
         const hitId = hitTest(clickPos);
         if (hitId) {
-           const dist = tempPoints[0].x;
-           const target = entities.find(e => e.id === hitId);
-           if (target) {
-              if (target.type === 'CIRCLE') {
-                 const r = target.radius + dist;
-                 if (r > 0) setEntities(prev => [...prev, { ...target, id: generateId(), radius: r }]);
-              } else if (target.type === 'RECTANGLE') {
-                 // expand outwards
-                 const w = Math.abs(target.p2.x - target.p1.x);
-                 const h = Math.abs(target.p2.y - target.p1.y);
-                 const cx = (target.p1.x + target.p2.x) / 2;
-                 const cy = (target.p1.y + target.p2.y) / 2;
-                 const p1 = { x: cx - (w/2 + dist), y: cy - (h/2 + dist) };
-                 const p2 = { x: cx + (w/2 + dist), y: cy + (h/2 + dist) };
-                 setEntities(prev => [...prev, { ...target, id: generateId(), p1, p2 }]);
-              } else if (target.type === 'LINE') {
-                 // Offset line by distance in its normal direction
-                 const dx = target.end.x - target.start.x;
-                 const dy = target.end.y - target.start.y;
-                 const len = Math.sqrt(dx*dx + dy*dy);
-                 if (len > 0) {
+            setSelectedIds(new Set([hitId]));
+            setCommandStep(2);
+        }
+    } else if (activeCommand === 'OFFSET' && commandStep === 2) {
+        if (typeof input !== 'object' || !('x' in input)) return;
+        const pt = input as Point;
+        const clickPos = rawWPos || pt;
+        
+        const dist = tempPoints[0].x;
+        const targetId = Array.from(selectedIds)[0];
+        const target = entities.find(e => e.id === targetId);
+        
+        if (target) {
+            if (target.type === 'CIRCLE') {
+                const dCenter = distance(clickPos, target.center);
+                const isOutside = dCenter > target.radius;
+                const r = isOutside ? target.radius + dist : target.radius - dist;
+                if (r > 0) setEntities(prev => [...prev, { ...target, id: generateId(), radius: r }]);
+            } else if (target.type === 'RECTANGLE') {
+                const cx = (target.p1.x + target.p2.x) / 2;
+                const cy = (target.p1.y + target.p2.y) / 2;
+                const rMinX = Math.min(target.p1.x, target.p2.x);
+                const rMaxX = Math.max(target.p1.x, target.p2.x);
+                const rMinY = Math.min(target.p1.y, target.p2.y);
+                const rMaxY = Math.max(target.p1.y, target.p2.y);
+                const isInside = clickPos.x >= rMinX && clickPos.x <= rMaxX && clickPos.y >= rMinY && clickPos.y <= rMaxY;
+                const d = isInside ? -dist : dist;
+                const w = Math.abs(target.p2.x - target.p1.x);
+                const h = Math.abs(target.p2.y - target.p1.y);
+                if (w + 2*d > 0 && h + 2*d > 0) {
+                    const p1 = { x: cx - (w/2 + d), y: cy - (h/2 + d) };
+                    const p2 = { x: cx + (w/2 + d), y: cy + (h/2 + d) };
+                    setEntities(prev => [...prev, { ...target, id: generateId(), p1, p2 }]);
+                }
+            } else if (target.type === 'LINE') {
+                const dx = target.end.x - target.start.x;
+                const dy = target.end.y - target.start.y;
+                const len = Math.sqrt(dx*dx + dy*dy);
+                if (len > 0) {
                     const nx = -dy / len;
                     const ny = dx / len;
-                    // Determine which side clicked point is on
                     const cross = (clickPos.x - target.start.x) * dy - (clickPos.y - target.start.y) * dx;
                     const dir = cross > 0 ? 1 : -1;
                     const start = { x: target.start.x + nx * dist * dir, y: target.start.y + ny * dist * dir };
                     const end = { x: target.end.x + nx * dist * dir, y: target.end.y + ny * dist * dir };
                     setEntities(prev => [...prev, { ...target, id: generateId(), start, end }]);
-                 }
-              }
-           }
-           onCommandComplete();
+                }
+            }
         }
+        onCommandComplete();
     } else if (activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') {
        if (commandStep === 1 && typeof input === 'object' && 'x' in input) {
          setTempPoints([input]);
