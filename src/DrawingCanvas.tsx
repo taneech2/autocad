@@ -15,7 +15,7 @@ export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension | Polygo
 
 interface DrawingCanvasProps {
   activeCommand: string | null;
-  typedInput: string | null;
+  typedInputToProcess: string | null;
   onCommandComplete: () => void;
   onPromptChange: (prompt: string) => void;
   onInputProcessed: () => void;
@@ -137,7 +137,7 @@ const mirrorPoint = (pt: Point, p1: Point, p2: Point): Point => {
 
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({ 
   activeCommand, 
-  typedInput,
+  typedInputToProcess,
   onCommandComplete,
   onPromptChange,
   onInputProcessed
@@ -189,14 +189,42 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     }
   }));
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (activeCommand === 'LINE' && commandStep === 1) {
+          onCommandComplete();
+          setSelectedIds(new Set());
+        } else if (activeCommand) {
+          onCommandComplete();
+          setSelectedIds(new Set());
+        } else {
+          setSelectedIds(new Set());
+        }
+      }
+      
+      if (e.key === 'Delete' && selectedIds.size > 0) {
+        setEntities(prev => prev.filter(e => !selectedIds.has(e.id)));
+        setSelectedIds(new Set());
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeCommand, commandStep, selectedIds]);
+
   // Update prompt based on command state
   useEffect(() => {
     if (!activeCommand) {
       onPromptChange('พิมพ์คำสั่งเพื่อเริ่มต้น... (Type a command)');
       setCommandStep(0);
       setTempPoints([]);
-      setSelectedIds(new Set());
       setStretchedPoints([]);
+      return;
+    }
+
+    const commandsWithSelection = ['MOVE', 'COPY', 'ROTATE', 'SCALE', 'MIRROR', 'ARRAY', 'EXPLODE', 'STRETCH'];
+    if (commandStep === 0 && selectedIds.size > 0 && commandsWithSelection.includes(activeCommand)) {
+      setCommandStep(1);
       return;
     }
 
@@ -262,8 +290,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
   // Process typed input
   useEffect(() => {
-    if (typedInput && activeCommand) {
-      if (typedInput === 'ENTER_KEY') {
+    if (typedInputToProcess && activeCommand) {
+      if (typedInputToProcess === 'ENTER_KEY') {
         if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'ARRAY') && commandStep === 0) {
           if (selectedIds.size > 0) setCommandStep(1);
         } else if (activeCommand === 'LINE' && commandStep === 1) {
@@ -874,13 +902,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       setLastMousePos({ x: e.clientX, y: e.clientY });
       return;
     }
-    if (e.button === 0 && activeCommand) {
+    if (e.button === 0) {
       const wPos = getWorldCoord(e);
       const roundedPos = { x: Math.round(wPos.x * 2) / 2, y: Math.round(wPos.y * 2) / 2 };
       const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;
       const pt = sp ? sp.point : roundedPos;
       
-      if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'ARRAY' || activeCommand === 'EXPLODE') && commandStep === 0) {
+      if (!activeCommand || ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'ARRAY' || activeCommand === 'EXPLODE') && commandStep === 0)) {
          const hitId = hitTest(wPos);
          if (hitId) {
             setSelectedIds(prev => {
