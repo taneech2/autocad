@@ -153,6 +153,7 @@ function App() {
         else if (input === 'S' || input === 'STRETCH') handleCommandClick('STRETCH');
         else if (input === 'POL' || input === 'POLYGON') handleCommandClick('POLYGON');
         else if (input === 'X' || input === 'EXPLODE') handleCommandClick('EXPLODE');
+        else if (input === 'A' || input === 'ARC') handleCommandClick('ARC');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
         if (input === '') setTypedInputToProcess('ENTER_KEY');
@@ -185,6 +186,12 @@ function App() {
     } else if (currentLesson === 2) {
       const lines = entities.filter(e => e.type === 'LINE');
       if (lines.length >= 3) passed = true;
+    } else if (currentLesson === 13) {
+      const lines = entities.filter(e => e.type === 'LINE');
+      if (lines.length >= 4) passed = true;
+    } else if (currentLesson === 14) {
+      const arcs = entities.filter(e => e.type === 'CIRCULAR_ARC' || e.type === 'ARC');
+      if (arcs.length >= 1) passed = true;
     } else if (currentLesson === 3) {
       const rects = entities.filter(e => e.type === 'RECTANGLE');
       const circles = entities.filter(e => e.type === 'CIRCLE');
@@ -372,11 +379,11 @@ function App() {
               value={currentLesson} 
               onChange={(e) => { setCurrentLesson(Number(e.target.value)); stopChallenge(); }}
             >
-              {[...Array(13)].map((_, i) => (
+              {[...Array(14)].map((_, i) => (
                 <option key={i} value={i + 1}>บทที่ {i + 1}</option>
               ))}
             </select>
-            <button onClick={() => { setCurrentLesson(Math.min(13, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            <button onClick={() => { setCurrentLesson(Math.min(14, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
           <div className="sidebar-content">
@@ -573,6 +580,19 @@ function App() {
                   <li>พิมพ์ <code>X</code> หรือ <code>EXPLODE</code> แล้วกด Enter</li>
                   <li>คลิกเลือกรูปทรงที่วาด</li>
                   <li>กด <strong>Enter</strong> เพื่อระเบิดรูปทรงให้กลายเป็นเส้นตรง!</li>
+                </ol>
+              </>
+            )}
+
+            {currentLesson === 14 && (
+              <>
+                <h3>บทที่ 14: การวาดเส้นโค้ง (ARC)</h3>
+                <p>คำสั่ง <strong>ARC (A)</strong> ใช้สำหรับวาดเส้นโค้งโดยการกำหนดจุด 3 จุดบนเส้นโค้ง (3-Point Arc)</p>
+                <ol>
+                  <li>พิมพ์ <code>A</code> แล้วกด Enter</li>
+                  <li>คลิกจุดเริ่มต้นของเส้นโค้ง</li>
+                  <li>คลิกจุดกึ่งกลาง (จุดที่เส้นโค้งจะลากผ่าน)</li>
+                  <li>คลิกจุดสิ้นสุดของเส้นโค้ง</li>
                 </ol>
               </>
             )}

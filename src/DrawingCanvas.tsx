@@ -318,6 +318,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       else if (commandStep === 1) onPromptChange(`STRETCH Select opposite corner:`);
       else if (commandStep === 2) onPromptChange(`STRETCH Specify base point:`);
       else if (commandStep === 3) onPromptChange(`STRETCH Specify second point:`);
+    } else if (activeCommand === 'ARC') {
+      if (commandStep === 0) onPromptChange(`ARC Specify start point of arc:`);
+      else if (commandStep === 1) onPromptChange(`ARC Specify second point of arc:`);
+      else if (commandStep === 2) onPromptChange(`ARC Specify end point of arc:`);
     } else if (activeCommand === 'POLYGON') {
       if (commandStep === 0) onPromptChange(`POLYGON Enter number of sides:`);
       else if (commandStep === 1) onPromptChange(`POLYGON Specify center of polygon:`);
@@ -1025,10 +1029,45 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
             if (stretchStart || stretchEnd) {
               const s = stretchStart ? {x: entity.start.x + dx, y: entity.start.y + dy} : entity.start;
               const e = stretchEnd ? {x: entity.end.x + dx, y: entity.end.y + dy} : entity.end;
-              drawEntity(ctx, { ...entity, start: s, end: e }, false, true);
+              ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); ctx.stroke();
+            } else {
+              drawEntity(ctx, entity, false, true);
             }
           }
         });
+      } else if (activeCommand === 'ARC') {
+         if (commandStep === 1 && tempPoints.length === 1) {
+             ctx.beginPath(); ctx.moveTo(tempPoints[0].x, tempPoints[0].y); ctx.lineTo(cursorPos.x, cursorPos.y); ctx.stroke();
+         } else if (commandStep === 2 && tempPoints.length === 2) {
+             const p1 = tempPoints[0];
+             const p2 = tempPoints[1];
+             const p3 = cursorPos;
+             const A = p2.x - p1.x, B = p2.y - p1.y;
+             const C = p3.x - p1.x, D = p3.y - p1.y;
+             const E = A * (p1.x + p2.x) + B * (p1.y + p2.y);
+             const F = C * (p1.x + p3.x) + D * (p1.y + p3.y);
+             const G = 2 * (A * (p3.y - p2.y) - B * (p3.x - p2.x));
+             if (Math.abs(G) > 1e-6) {
+                 const cx = (D * E - B * F) / G;
+                 const cy = (A * F - C * E) / G;
+                 const r = Math.sqrt((p1.x - cx)**2 + (p1.y - cy)**2);
+                 let sa = Math.atan2(p1.y - cy, p1.x - cx);
+                 let ang2 = Math.atan2(p2.y - cy, p2.x - cx);
+                 let ea = Math.atan2(p3.y - cy, p3.x - cx);
+                 if (sa < 0) sa += 2*Math.PI;
+                 if (ang2 < 0) ang2 += 2*Math.PI;
+                 if (ea < 0) ea += 2*Math.PI;
+                 
+                 let covers = false;
+                 if (ea < sa) covers = (ang2 >= sa || ang2 <= ea);
+                 else covers = (ang2 >= sa && ang2 <= ea);
+                 
+                 ctx.beginPath();
+                 if (covers) ctx.arc(cx, cy, r, sa, ea);
+                 else ctx.arc(cx, cy, r, ea, sa);
+                 ctx.stroke();
+             }
+         }
       } else if (activeCommand === 'POLYGON' && commandStep === 2 && tempPoints.length > 0) {
         const center = tempPoints[0];
         const r = distance(center, cursorPos);
@@ -1369,8 +1408,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
        if (commandStep === 0) {
           const s = Number(input);
           if (!isNaN(s) && s >= 3) {
-             // temporarily store sides in a hacky way in typedInput if we don't have state, but let's just use it from temp array.
-             // Actually, we can use a new state, but for now we can store it in tempPoints as a Point {x:s, y:s}
              setTempPoints([{x: s, y: s}]);
              setCommandStep(1);
           } else {
@@ -1381,13 +1418,60 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
           setTempPoints(prev => [...prev, typeof input === 'object' ? input as Point : {x:0, y:0}]);
           setCommandStep(2);
        } else if (commandStep === 2) {
-          const sides = tempPoints[0].x; // retrieve sides from our hacky storage
+          const sides = tempPoints[0].x; 
           const center = tempPoints[1];
           const r = typeof input === 'number' ? input : distance(center, input as Point);
           setEntities(prev => [...prev, { id: generateId(), type: 'POLYGON', center: center, radius: r, sides: sides }]);
           onCommandComplete();
        }
        return;
+    }
+
+    if (activeCommand === 'ARC') {
+        if (typeof input !== 'object' || !('x' in input)) return;
+        const pt = input as Point;
+        if (commandStep === 0) {
+            setTempPoints([pt]);
+            setCommandStep(1);
+        } else if (commandStep === 1) {
+            setTempPoints(prev => [...prev, pt]);
+            setCommandStep(2);
+        } else if (commandStep === 2) {
+             const p1 = tempPoints[0];
+             const p2 = tempPoints[1];
+             const p3 = pt;
+             const A = p2.x - p1.x, B = p2.y - p1.y;
+             const C = p3.x - p1.x, D = p3.y - p1.y;
+             const E = A * (p1.x + p2.x) + B * (p1.y + p2.y);
+             const F = C * (p1.x + p3.x) + D * (p1.y + p3.y);
+             const G = 2 * (A * (p3.y - p2.y) - B * (p3.x - p2.x));
+             if (Math.abs(G) > 1e-6) {
+                 const cx = (D * E - B * F) / G;
+                 const cy = (A * F - C * E) / G;
+                 const r = Math.sqrt((p1.x - cx)**2 + (p1.y - cy)**2);
+                 let sa = Math.atan2(p1.y - cy, p1.x - cx);
+                 let ang2 = Math.atan2(p2.y - cy, p2.x - cx);
+                 let ea = Math.atan2(p3.y - cy, p3.x - cx);
+                 if (sa < 0) sa += 2*Math.PI;
+                 if (ang2 < 0) ang2 += 2*Math.PI;
+                 if (ea < 0) ea += 2*Math.PI;
+                 
+                 let covers = false;
+                 if (ea < sa) covers = (ang2 >= sa || ang2 <= ea);
+                 else covers = (ang2 >= sa && ang2 <= ea);
+                 
+                 setEntities(prev => [...prev, {
+                     id: generateId(),
+                     type: 'CIRCULAR_ARC',
+                     center: {x: cx, y: cy},
+                     radius: r,
+                     startAngle: covers ? sa : ea,
+                     endAngle: covers ? ea : sa
+                 }]);
+             }
+             onCommandComplete();
+        }
+        return;
     }
 
     if (activeCommand === 'LINE') {
@@ -1465,9 +1549,14 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       }
     } else if (activeCommand === 'OFFSET' && commandStep === 0) {
         if (typeof input === 'number') {
-            setTempPoints([{ x: input, y: 0 }]); // Store distance in x of first temp point
+            setTempPoints([{ x: input, y: 0 }]); 
             setCommandStep(1);
         }
+    } else if (activeCommand === 'ARRAY' && commandStep === 1) {
+        if (typeof input !== 'object' || !('x' in input)) return;
+        const pt = input as Point;
+        setTempPoints([pt]);
+        setCommandStep(2);
     } else if (activeCommand === 'OFFSET' && commandStep === 1) {
         if (typeof input !== 'object' || !('x' in input)) return;
         const pt = input as Point;
