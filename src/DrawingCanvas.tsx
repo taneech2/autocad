@@ -645,11 +645,22 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
            const pt = getRaySegmentIntersection(rayEnd, rayDir, seg.p1, seg.p2);
            if (pt) intersections.push(pt);
        });
-       if (other.type === 'CIRCLE') {
-           const pts = getRayCircleIntersection(rayEnd, rayDir, other.center, other.radius);
-           intersections.push(...pts);
+       if (other.type === 'CIRCLE' || other.type === 'CIRCULAR_ARC') {
+           const pts = getRayCircleIntersection(rayEnd, rayDir, (other as any).center, (other as any).radius);
+           if (other.type === 'CIRCULAR_ARC') {
+              const validPts = pts.filter(pt => {
+                 let ang = Math.atan2(pt.y - (other as any).center.y, pt.x - (other as any).center.x);
+                 if (ang < 0) ang += 2*Math.PI;
+                 let sa = (other as any).startAngle < 0 ? (other as any).startAngle + 2*Math.PI : (other as any).startAngle;
+                 let ea = (other as any).endAngle < 0 ? (other as any).endAngle + 2*Math.PI : (other as any).endAngle;
+                 if (ea < sa) return ang >= sa || ang <= ea;
+                 return ang >= sa && ang <= ea;
+              });
+              intersections.push(...validPts);
+           } else {
+              intersections.push(...pts);
+           }
        }
-    });
     
     if (intersections.length > 0) {
        let closest = intersections[0];
