@@ -1470,7 +1470,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                 if (len > 0) {
                     const nx = -dy / len;
                     const ny = dx / len;
-                    const cross = (clickPos.x - target.start.x) * dy - (clickPos.y - target.start.y) * dx;
+                    const cross = dx * (clickPos.y - target.start.y) - dy * (clickPos.x - target.start.x);
                     const dir = cross > 0 ? 1 : -1;
                     const start = { x: target.start.x + nx * dist * dir, y: target.start.y + ny * dist * dir };
                     const end = { x: target.end.x + nx * dist * dir, y: target.end.y + ny * dist * dir };
