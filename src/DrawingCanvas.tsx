@@ -507,7 +507,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     }
 
     setSnapPoint(bestSnap);
-    return bestSnap ? bestSnap.point : wPos;
+    const bs = bestSnap as {point: Point, type: SnapType} | null;
+    return bs ? bs.point : wPos;
   };
 
   // Hit testing
