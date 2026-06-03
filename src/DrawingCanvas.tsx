@@ -150,12 +150,16 @@ const scalePoint = (pt: Point, origin: Point, factor: number): Point => {
 const mirrorPoint = (pt: Point, p1: Point, p2: Point): Point => {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
-  if (dx === 0 && dy === 0) return pt;
-  const a = (dx * dx - dy * dy) / (dx * dx + dy * dy);
-  const b = 2 * dx * dy / (dx * dx + dy * dy);
+  const sqDist = dx * dx + dy * dy;
+  if (sqDist === 0) return { x: pt.x, y: pt.y };
+  
+  const a = (dx * dx - dy * dy) / sqDist;
+  const b = 2 * dx * dy / sqDist;
+  const x = pt.x - p1.x;
+  const y = pt.y - p1.y;
   return {
-    x: a * (pt.x - p1.x) + b * (pt.y - p1.y) + p1.x,
-    y: b * (pt.x - p1.x) - a * (pt.y - p1.y) + p1.y
+    x: p1.x + a * x + b * y,
+    y: p1.y + b * x - a * y
   };
 };
 

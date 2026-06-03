@@ -292,6 +292,7 @@ function App() {
     <div className="app-container">
       <header className="ribbon" style={{ borderBottom: 'none' }}>
         <div className="ribbon-group">
+          <div className="ribbon-group-title">Draw</div>
           <button className={`ribbon-button ${activeCommand === 'LINE' ? 'active' : ''}`} onClick={() => handleCommandClick('LINE')}>
             <PenTool size={20} /><span>Line</span>
           </button>
@@ -301,8 +302,23 @@ function App() {
           <button className={`ribbon-button ${activeCommand === 'CIRCLE' ? 'active' : ''}`} onClick={() => handleCommandClick('CIRCLE')}>
             <Circle size={20} /><span>Circle</span>
           </button>
+          <button className={`ribbon-button ${activeCommand === 'POLYGON' ? 'active' : ''}`} onClick={() => handleCommandClick('POLYGON')}>
+            <Hexagon size={20} /><span>Polygon</span>
+          </button>
         </div>
+        
         <div className="ribbon-group">
+          <div className="ribbon-group-title">Annotate</div>
+          <button className={`ribbon-button ${activeCommand === 'TEXT' ? 'active' : ''}`} onClick={() => handleCommandClick('TEXT')}>
+            <Type size={20} /><span>Text</span>
+          </button>
+          <button className={`ribbon-button ${activeCommand === 'DIMENSION' ? 'active' : ''}`} onClick={() => handleCommandClick('DIMENSION')}>
+            <Maximize size={20} /><span>Dimension</span>
+          </button>
+        </div>
+
+        <div className="ribbon-group">
+          <div className="ribbon-group-title">Modify</div>
           <button className={`ribbon-button ${activeCommand === 'MOVE' ? 'active' : ''}`} onClick={() => handleCommandClick('MOVE')}>
             <Move size={20} /><span>Move</span>
           </button>
@@ -318,8 +334,6 @@ function App() {
           <button className={`ribbon-button ${activeCommand === 'STRETCH' ? 'active' : ''}`} onClick={() => handleCommandClick('STRETCH')}>
             <MoveHorizontal size={20} /><span>Stretch</span>
           </button>
-        </div>
-        <div className="ribbon-group">
           <button className={`ribbon-button ${activeCommand === 'MIRROR' ? 'active' : ''}`} onClick={() => handleCommandClick('MIRROR')}>
             <Monitor size={20} /><span>Mirror</span>
           </button>
@@ -335,35 +349,24 @@ function App() {
           <button className={`ribbon-button ${activeCommand === 'ARRAY' ? 'active' : ''}`} onClick={() => handleCommandClick('ARRAY')}>
             <Copy size={20} /><span>Array</span>
           </button>
-        </div>
-        <div className="ribbon-group">
-          <button className={`ribbon-button ${activeCommand === 'TEXT' ? 'active' : ''}`} onClick={() => handleCommandClick('TEXT')}>
-            <Type size={20} /><span>Text</span>
-          </button>
-          <button className={`ribbon-button ${activeCommand === 'DIMENSION' ? 'active' : ''}`} onClick={() => handleCommandClick('DIMENSION')}>
-            <Maximize size={20} /><span>Dimension</span>
-          </button>
-        </div>
-        <div className="ribbon-group">
           <button className={`ribbon-button ${activeCommand === 'ROTATE' ? 'active' : ''}`} onClick={() => handleCommandClick('ROTATE')}>
             <RotateCw size={20} /><span>Rotate</span>
           </button>
           <button className={`ribbon-button ${activeCommand === 'SCALE' ? 'active' : ''}`} onClick={() => handleCommandClick('SCALE')}>
             <Maximize size={20} /><span>Scale</span>
           </button>
-          <button className={`ribbon-button ${activeCommand === 'PAN' ? 'active' : ''}`} onClick={() => handleCommandClick('PAN')}>
-            <MousePointer2 size={20} /><span>Pan</span>
-          </button>
-        </div>
-        <div className="ribbon-group">
-          <div className="ribbon-group-title">Advanced</div>
-          <button className={`ribbon-button ${activeCommand === 'POLYGON' ? 'active' : ''}`} onClick={() => handleCommandClick('POLYGON')}>
-            <Hexagon size={20} /><span>Polygon</span>
-          </button>
           <button className={`ribbon-button ${activeCommand === 'EXPLODE' ? 'active' : ''}`} onClick={() => handleCommandClick('EXPLODE')}>
             <Bomb size={20} /><span>Explode</span>
           </button>
         </div>
+
+        <div className="ribbon-group">
+          <div className="ribbon-group-title">View</div>
+          <button className={`ribbon-button ${activeCommand === 'PAN' ? 'active' : ''}`} onClick={() => handleCommandClick('PAN')}>
+            <MousePointer2 size={20} /><span>Pan</span>
+          </button>
+        </div>
+
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', color: '#888', fontSize: '12px', paddingRight: '10px' }}>
           <span>สร้างโดยครูธานี ชมสุข</span>
         </div>
