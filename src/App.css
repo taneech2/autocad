@@ -323,6 +323,7 @@ canvas {
 .command-input {
   flex: 1;
   border: none;
+  background-color: transparent;
   color: var(--text-primary);
   font-family: inherit;
   font-size: inherit;
