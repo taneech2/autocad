@@ -661,6 +661,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
               intersections.push(...pts);
            }
        }
+    });
     
     if (intersections.length > 0) {
        let closest = intersections[0];
