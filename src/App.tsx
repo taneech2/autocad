@@ -25,6 +25,7 @@ interface LessonParams {
   l14_p1x: number; l14_p1y: number;
   l14_p2x: number; l14_p2y: number;
   l14_p3x: number; l14_p3y: number;
+  l15_lineX: number; l15_lineY: number;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -48,7 +49,8 @@ const generateRandomParams = (): LessonParams => {
     l12_centerY: randInt(-3, 3),
     l14_p1x: randInt(-5, -1), l14_p1y: randInt(1, 5),
     l14_p2x: randInt(-1, 3), l14_p2y: randInt(4, 8),
-    l14_p3x: randInt(2, 6), l14_p3y: randInt(-1, 3)
+    l14_p3x: randInt(2, 6), l14_p3y: randInt(-1, 3),
+    l15_lineX: randInt(1, 3), l15_lineY: randInt(1, 3)
   };
 };
 
@@ -198,6 +200,10 @@ function App() {
     } else if (currentLesson === 14) {
       const arcs = entities.filter(e => e.type === 'CIRCULAR_ARC' || e.type === 'ARC');
       if (arcs.length >= 1) passed = true;
+    } else if (currentLesson === 15) {
+      // For mirror, we expect original objects plus their mirrored copies.
+      // Simple verification: if there are more than 1 object (or 2 of the same type), we pass.
+      if (entities.length >= 2) passed = true;
     } else if (currentLesson === 3) {
       const rects = entities.filter(e => e.type === 'RECTANGLE');
       const circles = entities.filter(e => e.type === 'CIRCLE');
@@ -385,11 +391,11 @@ function App() {
               value={currentLesson} 
               onChange={(e) => { setCurrentLesson(Number(e.target.value)); stopChallenge(); }}
             >
-              {[...Array(14)].map((_, i) => (
+              {[...Array(15)].map((_, i) => (
                 <option key={i} value={i + 1}>บทที่ {i + 1}</option>
               ))}
             </select>
-            <button onClick={() => { setCurrentLesson(Math.min(14, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
+            <button onClick={() => { setCurrentLesson(Math.min(15, currentLesson + 1)); stopChallenge(); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><ChevronRight size={18} /></button>
           </div>
           
           <div className="sidebar-content">
@@ -600,6 +606,21 @@ function App() {
                   <li><i>second point:</i> พิมพ์ <code>{lessonParams.l14_p2x},{lessonParams.l14_p2y}</code> กด Enter</li>
                   <li><i>end point:</i> พิมพ์ <code>{lessonParams.l14_p3x},{lessonParams.l14_p3y}</code> กด Enter</li>
                   <li><strong>หรือ</strong> กด <code>A</code> แล้วลองใช้เมาส์คลิก 3 จุดบนหน้าจอแทนการพิมพ์ก็ได้นะ!</li>
+                </ol>
+              </>
+            )}
+
+            {currentLesson === 15 && (
+              <>
+                <h3>บทที่ 15: การกลับด้านวัตถุ (MIRROR)</h3>
+                <p>คำสั่ง <strong>MIRROR (MI)</strong> ใช้สำหรับสร้างสำเนากลับด้าน (เหมือนส่องกระจก) ของวัตถุ</p>
+                <ol>
+                  <li>วาดเส้น <strong>LINE (L)</strong> หรือวัตถุอะไรก็ได้ขึ้นมา 1 ชิ้น</li>
+                  <li>พิมพ์ <code>MI</code> แล้วเว้นวรรค 1 ครั้ง (Enter)</li>
+                  <li>ใช้เมาส์ <strong>คลิกเลือกวัตถุ</strong> ที่วาดไว้ แล้วกด Enter</li>
+                  <li><strong>คลิกจุดที่ 1</strong> ของเส้นกระจก (พิกัดไหนก็ได้)</li>
+                  <li><strong>คลิกจุดที่ 2</strong> ของเส้นกระจก (ทิศทางของกระจก)</li>
+                  <li>กด Enter หรือเลือกพิกัดเพื่อกลับด้านวัตถุ!</li>
                 </ol>
               </>
             )}
