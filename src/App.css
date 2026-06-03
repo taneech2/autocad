@@ -225,6 +225,65 @@ canvas {
   border-color: rgba(0, 150, 255, 0.4);
 }
 
+.status-btn-group {
+  display: flex;
+  position: relative;
+  align-items: stretch;
+}
+
+.status-btn-arrow {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-btn-arrow:hover {
+  background-color: rgba(255,255,255,0.1);
+  color: white;
+}
+
+.osnap-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  background-color: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
+  padding: 8px 0;
+  min-width: 200px;
+  border-radius: 4px;
+  z-index: 1000;
+  margin-bottom: 5px;
+}
+
+.osnap-menu-title {
+  padding: 4px 12px 8px;
+  color: var(--text-primary);
+  font-weight: bold;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 4px;
+}
+
+.osnap-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  gap: 8px;
+}
+
+.osnap-menu-item:hover {
+  background-color: rgba(255,255,255,0.05);
+  color: white;
+}
+
 /* Command Line */
 .command-line {
   height: 150px;

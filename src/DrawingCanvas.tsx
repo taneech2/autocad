@@ -16,10 +16,21 @@ export interface Polygon extends BaseEntity { type: 'POLYGON'; center: Point; ra
 export interface CircularArc extends BaseEntity { type: 'CIRCULAR_ARC'; center: Point; radius: number; startAngle: number; endAngle: number; }
 export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension | DimAligned | DimAngular | Polygon | CircularArc;
 
+export type OsnapSettings = {
+  endpoint: boolean;
+  midpoint: boolean;
+  center: boolean;
+  geometricCenter: boolean;
+  quadrant: boolean;
+  intersection: boolean;
+  nearest: boolean;
+};
+
 interface DrawingCanvasProps {
   activeCommand: string | null;
   typedInputToProcess: string | null;
   osnap: boolean;
+  osnapSettings: OsnapSettings;
   ortho: boolean;
   polar: boolean;
   otrack: boolean;
@@ -36,6 +47,25 @@ export interface DrawingCanvasHandle {
 
 // Math utils
 const distance = (p1: Point, p2: Point) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+const midpoint = (p1: Point, p2: Point) => ({ x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 });
+const nearestPointOnLine = (p: Point, a: Point, b: Point): Point => {
+  const atob = { x: b.x - a.x, y: b.y - a.y };
+  const atop = { x: p.x - a.x, y: p.y - a.y };
+  const len2 = atob.x * atob.x + atob.y * atob.y;
+  let dot = atop.x * atob.x + atop.y * atob.y;
+  const t = Math.min(Math.max(dot / len2, 0), 1);
+  return { x: a.x + atob.x * t, y: a.y + atob.y * t };
+};
+const lineIntersection = (p1: Point, p2: Point, p3: Point, p4: Point): Point | null => {
+  const d = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+  if (d === 0) return null; // Parallel
+  const t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / d;
+  const u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / d;
+  if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+    return { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) };
+  }
+  return null;
+};
 
 const distanceToLineSegment = (p: Point, v: Point, w: Point) => {
   const l2 = Math.pow(distance(v, w), 2);
@@ -172,6 +202,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   activeCommand, 
   typedInputToProcess,
   osnap,
+  osnapSettings,
   ortho,
   polar,
   otrack,
@@ -204,7 +235,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   };
   
   // OSNAP state
-  const [snapPoint, setSnapPoint] = useState<{point: Point, type: 'endpoint'|'center'} | null>(null);
+  type SnapType = 'endpoint' | 'midpoint' | 'center' | 'geometricCenter' | 'quadrant' | 'intersection' | 'nearest';
+  const [snapPoint, setSnapPoint] = useState<{point: Point, type: SnapType} | null>(null);
   const [acquiredPoints, setAcquiredPoints] = useState<Point[]>([]);
   const [trackedPoint, setTrackedPoint] = useState<Point | null>(null);
 
@@ -392,40 +424,90 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     if (!osnap) return wPos;
 
     const snapDistance = 15 / zoom; 
-    let bestSnap: {point: Point, type: 'endpoint'|'center'} | null = null;
+    let bestSnap: {point: Point, type: SnapType} | null = null;
     let minDist = snapDistance;
 
+    const checkSnap = (pt: Point, type: SnapType) => {
+      const d = distance(wPos, pt);
+      if (d < minDist) { minDist = d; bestSnap = { point: pt, type }; }
+    };
+
+    // First pass: basic points (endpoints, midpoints, centers, quadrants, geometric centers)
     entities.forEach(entity => {
       if (entity.type === 'LINE') {
-        const d1 = distance(wPos, entity.start);
-        if (d1 < minDist) { minDist = d1; bestSnap = { point: entity.start, type: 'endpoint' }; }
-        const d2 = distance(wPos, entity.end);
-        if (d2 < minDist) { minDist = d2; bestSnap = { point: entity.end, type: 'endpoint' }; }
+        if (osnapSettings.endpoint) {
+          checkSnap(entity.start, 'endpoint');
+          checkSnap(entity.end, 'endpoint');
+        }
+        if (osnapSettings.midpoint) checkSnap(midpoint(entity.start, entity.end), 'midpoint');
+        if (osnapSettings.nearest) {
+          const p = nearestPointOnLine(wPos, entity.start, entity.end);
+          if (distance(p, entity.start) > 0.01 && distance(p, entity.end) > 0.01) {
+             checkSnap(p, 'nearest');
+          }
+        }
       } else if (entity.type === 'RECTANGLE') {
         const pts = [
           entity.p1, entity.p2, 
           { x: entity.p1.x, y: entity.p2.y }, 
           { x: entity.p2.x, y: entity.p1.y }
         ];
-        pts.forEach(pt => {
-          const d = distance(wPos, pt);
-          if (d < minDist) { minDist = d; bestSnap = { point: pt, type: 'endpoint' }; }
-        });
+        if (osnapSettings.endpoint) {
+          pts.forEach(pt => checkSnap(pt, 'endpoint'));
+        }
+        if (osnapSettings.midpoint) {
+          checkSnap(midpoint(pts[0], pts[2]), 'midpoint');
+          checkSnap(midpoint(pts[2], pts[1]), 'midpoint');
+          checkSnap(midpoint(pts[1], pts[3]), 'midpoint');
+          checkSnap(midpoint(pts[3], pts[0]), 'midpoint');
+        }
+        if (osnapSettings.geometricCenter) {
+          checkSnap(midpoint(entity.p1, entity.p2), 'geometricCenter');
+        }
+        if (osnapSettings.nearest) {
+           [
+             [pts[0], pts[2]], [pts[2], pts[1]], [pts[1], pts[3]], [pts[3], pts[0]]
+           ].forEach(([a, b]) => {
+             const p = nearestPointOnLine(wPos, a, b);
+             checkSnap(p, 'nearest');
+           });
+        }
       } else if (entity.type === 'CIRCLE') {
-        const d = distance(wPos, entity.center);
-        if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
+        if (osnapSettings.center) checkSnap(entity.center, 'center');
+        if (osnapSettings.quadrant) {
+          checkSnap({ x: entity.center.x, y: entity.center.y + entity.radius }, 'quadrant');
+          checkSnap({ x: entity.center.x, y: entity.center.y - entity.radius }, 'quadrant');
+          checkSnap({ x: entity.center.x + entity.radius, y: entity.center.y }, 'quadrant');
+          checkSnap({ x: entity.center.x - entity.radius, y: entity.center.y }, 'quadrant');
+        }
+        if (osnapSettings.nearest) {
+          const ang = Math.atan2(wPos.y - entity.center.y, wPos.x - entity.center.x);
+          checkSnap({ x: entity.center.x + Math.cos(ang) * entity.radius, y: entity.center.y + Math.sin(ang) * entity.radius }, 'nearest');
+        }
       } else if (entity.type === 'CIRCULAR_ARC') {
-        const d = distance(wPos, entity.center);
-        if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
+        if (osnapSettings.center) checkSnap(entity.center, 'center');
+        if (osnapSettings.endpoint) {
+          checkSnap({ x: entity.center.x + Math.cos(entity.startAngle) * entity.radius, y: entity.center.y + Math.sin(entity.startAngle) * entity.radius }, 'endpoint');
+          checkSnap({ x: entity.center.x + Math.cos(entity.endAngle) * entity.radius, y: entity.center.y + Math.sin(entity.endAngle) * entity.radius }, 'endpoint');
+        }
       } else if (entity.type === 'POLYGON') {
-        const d = distance(wPos, entity.center);
-        if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
+        if (osnapSettings.geometricCenter) checkSnap(entity.center, 'geometricCenter');
       }
     });
 
+    // Intersections (Lines)
+    if (osnapSettings.intersection) {
+      const lines = entities.filter(e => e.type === 'LINE') as Line[];
+      for (let i = 0; i < lines.length; i++) {
+        for (let j = i + 1; j < lines.length; j++) {
+          const pt = lineIntersection(lines[i].start, lines[i].end, lines[j].start, lines[j].end);
+          if (pt) checkSnap(pt, 'intersection');
+        }
+      }
+    }
+
     setSnapPoint(bestSnap);
-    const bs = bestSnap as {point: Point, type: 'endpoint'|'center'} | null;
-    return bs ? bs.point : wPos;
+    return bestSnap ? bestSnap.point : wPos;
   };
 
   // Hit testing
@@ -1178,13 +1260,34 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       }
 
       if (snapPoint) {
-        const sp = snapPoint as {point: Point, type: 'endpoint'|'center'};
+        const sp = snapPoint as {point: Point, type: SnapType};
         ctx.strokeStyle = '#ffff00'; 
         ctx.lineWidth = 2 / zoom;
         const size = 10 / zoom;
+        const spx = sp.point.x;
+        const spy = sp.point.y;
+        
         ctx.beginPath();
-        if (sp.type === 'endpoint') ctx.rect(sp.point.x - size/2, sp.point.y - size/2, size, size);
-        else if (sp.type === 'center') ctx.arc(sp.point.x, sp.point.y, size/2, 0, 2 * Math.PI);
+        if (sp.type === 'endpoint') {
+          ctx.rect(spx - size/2, spy - size/2, size, size);
+        } else if (sp.type === 'center') {
+          ctx.arc(spx, spy, size/2, 0, 2 * Math.PI);
+        } else if (sp.type === 'midpoint') {
+          ctx.moveTo(spx, spy + size/2); ctx.lineTo(spx - size/2, spy - size/2); ctx.lineTo(spx + size/2, spy - size/2); ctx.closePath();
+        } else if (sp.type === 'intersection') {
+          ctx.moveTo(spx - size/2, spy - size/2); ctx.lineTo(spx + size/2, spy + size/2);
+          ctx.moveTo(spx - size/2, spy + size/2); ctx.lineTo(spx + size/2, spy - size/2);
+        } else if (sp.type === 'quadrant') {
+          ctx.moveTo(spx, spy + size/2); ctx.lineTo(spx - size/2, spy);
+          ctx.lineTo(spx, spy - size/2); ctx.lineTo(spx + size/2, spy); ctx.closePath();
+        } else if (sp.type === 'nearest') {
+          ctx.moveTo(spx - size/2, spy + size/2); ctx.lineTo(spx + size/2, spy + size/2);
+          ctx.lineTo(spx - size/2, spy - size/2); ctx.lineTo(spx + size/2, spy - size/2); ctx.closePath();
+        } else if (sp.type === 'geometricCenter') {
+          ctx.arc(spx, spy, size/2, 0, 2 * Math.PI);
+          ctx.moveTo(spx - size/2 - 2/zoom, spy); ctx.lineTo(spx + size/2 + 2/zoom, spy);
+          ctx.moveTo(spx, spy - size/2 - 2/zoom); ctx.lineTo(spx, spy + size/2 + 2/zoom);
+        }
         ctx.stroke();
       }
 
@@ -1261,7 +1364,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       // Draw Crosshair
       ctx.strokeStyle = '#cccccc';
       ctx.lineWidth = 1;
-      const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;
+      const sp = snapPoint as {point: Point, type: SnapType} | null;
       const effectivePos = sp ? sp.point : cursorPos;
       const screenX = (effectivePos.x * zoom) + canvas.width/2 + pan.x;
       const screenY = (-effectivePos.y * zoom) + canvas.height/2 + pan.y;
@@ -1391,7 +1494,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       setAcquiredPoints([]);
       const wPos = getWorldCoord(e);
       const roundedPos = { x: Math.round(wPos.x * 2) / 2, y: Math.round(wPos.y * 2) / 2 };
-      const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;
+      const sp = snapPoint as {point: Point, type: SnapType} | null;
       const pt = sp ? sp.point : roundedPos;
       
       if (!activeCommand || ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'ARRAY' || activeCommand === 'EXPLODE') && commandStep === 0)) {

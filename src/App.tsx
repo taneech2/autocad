@@ -61,6 +61,16 @@ function App() {
   // Status Bar States
   const [cursorDisplay, setCursorDisplay] = useState<{x: number, y: number} | null>(null);
   const [osnap, setOsnap] = useState<boolean>(true);
+  const [showOsnapMenu, setShowOsnapMenu] = useState<boolean>(false);
+  const [osnapSettings, setOsnapSettings] = useState({
+    endpoint: true,
+    midpoint: true,
+    center: true,
+    geometricCenter: true,
+    quadrant: false,
+    intersection: true,
+    nearest: false
+  });
   const [ortho, setOrtho] = useState<boolean>(false);
   const [polar, setPolar] = useState<boolean>(false);
   const [otrack, setOtrack] = useState<boolean>(false);
@@ -653,6 +663,7 @@ function App() {
             activeCommand={activeCommand} 
             typedInputToProcess={typedInputToProcess}
             osnap={osnap}
+            osnapSettings={osnapSettings}
             ortho={ortho}
             polar={polar}
             otrack={otrack}
@@ -688,7 +699,25 @@ function App() {
             <div className="coord-display">
               {cursorDisplay ? `${cursorDisplay.x.toFixed(4)}, ${cursorDisplay.y.toFixed(4)}` : ''}
             </div>
-            <button className={`status-btn ${osnap ? 'active' : ''}`} onClick={() => setOsnap(!osnap)}>OSNAP</button>
+            <div className="status-btn-group">
+              <button className={`status-btn ${osnap ? 'active' : ''}`} onClick={() => setOsnap(!osnap)}>OSNAP</button>
+              <button className="status-btn-arrow" onClick={() => setShowOsnapMenu(!showOsnapMenu)}>^</button>
+              {showOsnapMenu && (
+                <div className="osnap-menu">
+                  <div className="osnap-menu-title">Object Snap Settings</div>
+                  {Object.entries(osnapSettings).map(([key, value]) => (
+                    <label key={key} className="osnap-menu-item">
+                      <input 
+                        type="checkbox" 
+                        checked={value} 
+                        onChange={() => setOsnapSettings(prev => ({ ...prev, [key]: !prev[key as keyof typeof osnapSettings] }))}
+                      />
+                      <span>{key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1').trim()}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
             <button className={`status-btn ${otrack ? 'active' : ''}`} onClick={() => setOtrack(!otrack)}>OTRACK</button>
             <button className={`status-btn ${ortho ? 'active' : ''}`} onClick={() => { setOrtho(!ortho); if (!ortho) setPolar(false); }}>ORTHO</button>
             <button className={`status-btn ${polar ? 'active' : ''}`} onClick={() => { setPolar(!polar); if (!polar) setOrtho(false); }}>POLAR</button>
