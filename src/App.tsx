@@ -22,6 +22,9 @@ interface LessonParams {
   l12_radius: number;
   l12_centerX: number;
   l12_centerY: number;
+  l14_p1x: number; l14_p1y: number;
+  l14_p2x: number; l14_p2y: number;
+  l14_p3x: number; l14_p3y: number;
 }
 
 const generateRandomParams = (): LessonParams => {
@@ -42,7 +45,10 @@ const generateRandomParams = (): LessonParams => {
     l12_sides: randInt(5, 8),
     l12_radius: randInt(3, 5),
     l12_centerX: randInt(-3, 3),
-    l12_centerY: randInt(-3, 3)
+    l12_centerY: randInt(-3, 3),
+    l14_p1x: randInt(-5, -1), l14_p1y: randInt(1, 5),
+    l14_p2x: randInt(-1, 3), l14_p2y: randInt(4, 8),
+    l14_p3x: randInt(2, 6), l14_p3y: randInt(-1, 3)
   };
 };
 
@@ -587,12 +593,12 @@ function App() {
             {currentLesson === 14 && (
               <>
                 <h3>บทที่ 14: การวาดเส้นโค้ง (ARC)</h3>
-                <p>คำสั่ง <strong>ARC (A)</strong> ใช้สำหรับวาดเส้นโค้งโดยการกำหนดจุด 3 จุดบนเส้นโค้ง (3-Point Arc)</p>
+                <p>คำสั่ง <strong>ARC (A)</strong> ใช้สำหรับวาดเส้นโค้งโดยการพิมพ์พิกัด 3 จุด (3-Point Arc)</p>
                 <ol>
                   <li>พิมพ์ <code>A</code> แล้วกด Enter</li>
-                  <li>คลิกจุดเริ่มต้นของเส้นโค้ง</li>
-                  <li>คลิกจุดกึ่งกลาง (จุดที่เส้นโค้งจะลากผ่าน)</li>
-                  <li>คลิกจุดสิ้นสุดของเส้นโค้ง</li>
+                  <li><i>start point:</i> พิมพ์ <code>{lessonParams.l14_p1x},{lessonParams.l14_p1y}</code> กด Enter</li>
+                  <li><i>second point:</i> พิมพ์ <code>{lessonParams.l14_p2x},{lessonParams.l14_p2y}</code> กด Enter</li>
+                  <li><i>end point:</i> พิมพ์ <code>{lessonParams.l14_p3x},{lessonParams.l14_p3y}</code> กด Enter</li>
                 </ol>
               </>
             )}
