@@ -704,6 +704,22 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         ctx.setLineDash(isPreview ? [5/zoom, 5/zoom] : []);
       }
 
+      const drawArrowhead = (x: number, y: number, angle: number) => {
+        const arrowLength = 2.0 / zoom;
+        const arrowWidth = 0.5 / zoom;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-arrowLength, arrowWidth);
+        ctx.lineTo(-arrowLength, -arrowWidth);
+        ctx.closePath();
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fill();
+        ctx.restore();
+      };
+
       if (entity.type === 'LINE') {
         ctx.beginPath();
         ctx.moveTo(entity.start.x, entity.start.y);
@@ -794,6 +810,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         ctx.moveTo(d1.x, d1.y); ctx.lineTo(d2.x, d2.y);
         ctx.stroke();
         
+        drawArrowhead(d1.x, d1.y, Math.atan2(d1.y - d2.y, d1.x - d2.x));
+        drawArrowhead(d2.x, d2.y, Math.atan2(d2.y - d1.y, d2.x - d1.x));
+        
         // Draw text
         ctx.save();
         ctx.scale(1, -1);
@@ -835,6 +854,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
            ctx.moveTo(entity.p2.x, entity.p2.y); ctx.lineTo(d2.x, d2.y);
            ctx.moveTo(d1.x, d1.y); ctx.lineTo(d2.x, d2.y);
            ctx.stroke();
+           
+           drawArrowhead(d1.x, d1.y, Math.atan2(d1.y - d2.y, d1.x - d2.x));
+           drawArrowhead(d2.x, d2.y, Math.atan2(d2.y - d1.y, d2.x - d1.x));
            
            ctx.save();
            const midX = (d1.x + d2.x) / 2;
@@ -880,6 +902,17 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         
         ctx.arc(entity.center.x, entity.center.y, r, startA, endA, !inArc);
         ctx.stroke();
+        
+        const pA = { x: entity.center.x + Math.cos(startA) * r, y: entity.center.y + Math.sin(startA) * r };
+        const pB = { x: entity.center.x + Math.cos(endA) * r, y: entity.center.y + Math.sin(endA) * r };
+        
+        // The tangent at startA points at startA +/- PI/2
+        // We want the arrowhead to point OUT of the arc.
+        // If the arc is drawn from startA to endA using !inArc (counterClockwise),
+        // the tangent pointing away from the arc at startA is startA - PI/2 if !inArc is true, else startA + PI/2.
+        const counterClockwise = !inArc;
+        drawArrowhead(pA.x, pA.y, startA + (counterClockwise ? -Math.PI/2 : Math.PI/2));
+        drawArrowhead(pB.x, pB.y, endA + (counterClockwise ? Math.PI/2 : -Math.PI/2));
         
         ctx.save();
         ctx.scale(1, -1);
