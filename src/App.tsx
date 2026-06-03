@@ -599,6 +599,7 @@ function App() {
                   <li><i>start point:</i> พิมพ์ <code>{lessonParams.l14_p1x},{lessonParams.l14_p1y}</code> กด Enter</li>
                   <li><i>second point:</i> พิมพ์ <code>{lessonParams.l14_p2x},{lessonParams.l14_p2y}</code> กด Enter</li>
                   <li><i>end point:</i> พิมพ์ <code>{lessonParams.l14_p3x},{lessonParams.l14_p3y}</code> กด Enter</li>
+                  <li><strong>หรือ</strong> กด <code>A</code> แล้วลองใช้เมาส์คลิก 3 จุดบนหน้าจอแทนการพิมพ์ก็ได้นะ!</li>
                 </ol>
               </>
             )}
