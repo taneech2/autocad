@@ -145,6 +145,20 @@ function App() {
       setCommandInput('');
       return;
     }
+    if (cmd === 'GROUP') {
+      canvasRef.current?.groupSelected();
+      setHistory(prev => [...prev, `Command: GROUP`]);
+      setTypedInputToProcess(null);
+      setCommandInput('');
+      return;
+    }
+    if (cmd === 'UNGROUP') {
+      canvasRef.current?.ungroupSelected();
+      setHistory(prev => [...prev, `Command: UNGROUP`]);
+      setTypedInputToProcess(null);
+      setCommandInput('');
+      return;
+    }
     setActiveCommand(cmd);
     setHistory(prev => [...prev, `Command: ${cmd}`]);
     setTypedInputToProcess(null);
@@ -181,6 +195,8 @@ function App() {
         else if (input === 'S' || input === 'STRETCH') handleCommandClick('STRETCH');
         else if (input === 'POL' || input === 'POLYGON') handleCommandClick('POLYGON');
         else if (input === 'X' || input === 'EXPLODE') handleCommandClick('EXPLODE');
+        else if (input === 'G' || input === 'GROUP') handleCommandClick('GROUP');
+        else if (input === 'UNGROUP') handleCommandClick('UNGROUP');
         else if (input === 'A' || input === 'ARC') handleCommandClick('ARC');
         else if (input !== '') setPrompt(`Unknown command "${input}". Press F1 for help.`);
       } else {
@@ -374,6 +390,12 @@ function App() {
           </button>
           <button className={`ribbon-button ${activeCommand === 'SCALE' ? 'active' : ''}`} onClick={() => handleCommandClick('SCALE')}>
             <Maximize size={20} /><span>Scale</span>
+          </button>
+          <button className={`ribbon-button`} onClick={() => handleCommandClick('GROUP')}>
+            <Layers size={20} /><span>Group</span>
+          </button>
+          <button className={`ribbon-button`} onClick={() => handleCommandClick('UNGROUP')}>
+            <Layers size={20} style={{ opacity: 0.5 }} /><span>Ungroup</span>
           </button>
           <button className={`ribbon-button ${activeCommand === 'EXPLODE' ? 'active' : ''}`} onClick={() => handleCommandClick('EXPLODE')}>
             <Bomb size={20} /><span>Explode</span>

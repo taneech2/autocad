@@ -3,7 +3,7 @@ import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } fro
 import { parseCoordinate } from './CommandEngine';
 
 export interface Point { x: number; y: number; }
-export interface BaseEntity { id: string; }
+export interface BaseEntity { id: string; groupId?: string; }
 export interface Line extends BaseEntity { type: 'LINE'; start: Point; end: Point; }
 export interface Circle extends BaseEntity { type: 'CIRCLE'; center: Point; radius: number; }
 export interface Rectangle extends BaseEntity { type: 'RECTANGLE'; p1: Point; p2: Point; filletRadius?: number; chamferDist?: number; }
@@ -44,6 +44,8 @@ interface DrawingCanvasProps {
 export interface DrawingCanvasHandle {
   getEntities: () => Entity[];
   undo: () => void;
+  groupSelected: () => void;
+  ungroupSelected: () => void;
 }
 
 // Math utils
@@ -260,6 +262,21 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         _setEntities(prev);
         return h.slice(0, -1);
       });
+    },
+    groupSelected: () => {
+      if (selectedIds.size > 1) {
+        const newGroupId = generateId();
+        setEntities(prev => prev.map(e => selectedIds.has(e.id) ? { ...e, groupId: newGroupId } : e));
+        onPromptChange('Entities grouped.');
+      } else {
+        onPromptChange('Select at least 2 entities to group.');
+      }
+    },
+    ungroupSelected: () => {
+      if (selectedIds.size > 0) {
+        setEntities(prev => prev.map(e => selectedIds.has(e.id) ? { ...e, groupId: undefined } : e));
+        onPromptChange('Entities ungrouped.');
+      }
     }
   }));
 
@@ -1505,8 +1522,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
          if (hitId) {
             setSelectedIds(prev => {
               const next = new Set(prev);
-              if (next.has(hitId)) next.delete(hitId);
-              else next.add(hitId);
+              const isSelected = next.has(hitId);
+              const idsToToggle = getGroupIds(hitId);
+              idsToToggle.forEach(id => {
+                if (isSelected) next.delete(id);
+                else next.add(id);
+              });
               return next;
             });
          } else {
@@ -1586,7 +1607,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
        });
 
        if (newSelected.size > 0) {
-           setSelectedIds(prev => new Set([...prev, ...newSelected]));
+           const expandedSelected = new Set<string>();
+           newSelected.forEach(id => {
+               getGroupIds(id).forEach(gId => expandedSelected.add(gId));
+           });
+           setSelectedIds(prev => new Set([...prev, ...expandedSelected]));
        }
        setSelectionBox(null);
     }
@@ -1818,7 +1843,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
         const clickPos = rawWPos || pt;
         const hitId = hitTest(clickPos);
         if (hitId) {
-            setSelectedIds(new Set([hitId]));
+            setSelectedIds(new Set(getGroupIds(hitId)));
             setCommandStep(2);
         }
     } else if (activeCommand === 'OFFSET' && commandStep === 2) {
@@ -1946,7 +1971,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                     });
                     onCommandComplete();
                 } else if (target && target.type === 'LINE') {
-                    setSelectedIds(new Set([hitId]));
+                    setSelectedIds(new Set(getGroupIds(hitId)));
                     setCommandStep(2);
                 }
             }
