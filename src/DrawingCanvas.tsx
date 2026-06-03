@@ -1430,6 +1430,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     return { x, y }; 
   };
 
+  const getGroupIds = (id: string) => {
+    const ent = entities.find(e => e.id === id);
+    if (ent?.groupId) return entities.filter(e => e.groupId === ent.groupId).map(e => e.id);
+    return [id];
+  };
+
   const handleMouseMove = (e: ReactMouseEvent) => {
     let wPos = getWorldCoord(e);
     const snapped = calculateSnap(wPos); 
