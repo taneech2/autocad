@@ -73,6 +73,8 @@ function App() {
   });
   const [ortho, setOrtho] = useState<boolean>(false);
   const [polar, setPolar] = useState<boolean>(false);
+  const [polarAngle, setPolarAngle] = useState<number>(45);
+  const [showPolarMenu, setShowPolarMenu] = useState<boolean>(false);
   const [otrack, setOtrack] = useState<boolean>(false);
 
   const [commandInput, setCommandInput] = useState<string>('');
@@ -666,6 +668,7 @@ function App() {
             osnapSettings={osnapSettings}
             ortho={ortho}
             polar={polar}
+            polarAngle={polarAngle}
             otrack={otrack}
             onCommandComplete={handleCommandComplete} 
             onPromptChange={setPrompt}
@@ -720,7 +723,25 @@ function App() {
             </div>
             <button className={`status-btn ${otrack ? 'active' : ''}`} onClick={() => setOtrack(!otrack)}>OTRACK</button>
             <button className={`status-btn ${ortho ? 'active' : ''}`} onClick={() => { setOrtho(!ortho); if (!ortho) setPolar(false); }}>ORTHO</button>
-            <button className={`status-btn ${polar ? 'active' : ''}`} onClick={() => { setPolar(!polar); if (!polar) setOrtho(false); }}>POLAR</button>
+            <div className="status-btn-group">
+              <button className={`status-btn ${polar ? 'active' : ''}`} onClick={() => { setPolar(!polar); if (!polar) setOrtho(false); }}>POLAR</button>
+              <button className="status-btn-arrow" onClick={() => setShowPolarMenu(!showPolarMenu)}>^</button>
+              {showPolarMenu && (
+                <div className="osnap-menu" style={{ right: 0 }}>
+                  {[90, 45, 30, 23, 18, 15, 10, 5].map(ang => (
+                    <div 
+                      key={ang} 
+                      className="osnap-menu-item" 
+                      style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      onClick={() => { setPolarAngle(ang); setShowPolarMenu(false); }}
+                    >
+                      <span style={{ width: '20px', display: 'inline-block' }}>{polarAngle === ang ? '✓' : ''}</span>
+                      <span>{ang}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </footer>

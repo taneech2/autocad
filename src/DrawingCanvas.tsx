@@ -33,6 +33,7 @@ interface DrawingCanvasProps {
   osnapSettings: OsnapSettings;
   ortho: boolean;
   polar: boolean;
+  polarAngle: number;
   otrack: boolean;
   onCommandComplete: () => void;
   onPromptChange: (prompt: string) => void;
@@ -205,6 +206,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   osnapSettings,
   ortho,
   polar,
+  polarAngle,
   otrack,
   onCommandComplete,
   onPromptChange,
@@ -1461,7 +1463,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
           if (angle < 0) angle += 360;
           const dist = distance(basePoint, wPos);
           
-          const snapAngle = Math.round(angle / 45) * 45;
+          const snapAngle = Math.round(angle / polarAngle) * polarAngle;
           const diff = Math.abs(angle - snapAngle);
           if (diff < 5 || diff > 355) {
             const rad = snapAngle * Math.PI / 180;
