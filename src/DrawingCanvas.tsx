@@ -19,9 +19,14 @@ export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension | DimAli
 interface DrawingCanvasProps {
   activeCommand: string | null;
   typedInputToProcess: string | null;
+  osnap: boolean;
+  ortho: boolean;
+  polar: boolean;
+  otrack: boolean;
   onCommandComplete: () => void;
   onPromptChange: (prompt: string) => void;
   onInputProcessed: () => void;
+  onCursorMove: (pos: Point | null) => void;
 }
 
 export interface DrawingCanvasHandle {
@@ -166,9 +171,14 @@ const mirrorPoint = (pt: Point, p1: Point, p2: Point): Point => {
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({ 
   activeCommand, 
   typedInputToProcess,
+  osnap,
+  ortho,
+  polar,
+  otrack,
   onCommandComplete,
   onPromptChange,
-  onInputProcessed
+  onInputProcessed,
+  onCursorMove
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -195,6 +205,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   
   // OSNAP state
   const [snapPoint, setSnapPoint] = useState<{point: Point, type: 'endpoint'|'center'} | null>(null);
+  const [acquiredPoints, setAcquiredPoints] = useState<Point[]>([]);
+  const [trackedPoint, setTrackedPoint] = useState<Point | null>(null);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -375,16 +387,19 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   }, [typedInputToProcess]);
 
   // Find OSNAP
-  const calculateSnap = (worldPos: Point) => {
+  const calculateSnap = (wPos: Point) => {
+    setSnapPoint(null);
+    if (!osnap) return wPos;
+
     const snapDistance = 15 / zoom; 
     let bestSnap: {point: Point, type: 'endpoint'|'center'} | null = null;
     let minDist = snapDistance;
 
     entities.forEach(entity => {
       if (entity.type === 'LINE') {
-        const d1 = distance(worldPos, entity.start);
+        const d1 = distance(wPos, entity.start);
         if (d1 < minDist) { minDist = d1; bestSnap = { point: entity.start, type: 'endpoint' }; }
-        const d2 = distance(worldPos, entity.end);
+        const d2 = distance(wPos, entity.end);
         if (d2 < minDist) { minDist = d2; bestSnap = { point: entity.end, type: 'endpoint' }; }
       } else if (entity.type === 'RECTANGLE') {
         const pts = [
@@ -393,24 +408,23 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
           { x: entity.p2.x, y: entity.p1.y }
         ];
         pts.forEach(pt => {
-          const d = distance(worldPos, pt);
+          const d = distance(wPos, pt);
           if (d < minDist) { minDist = d; bestSnap = { point: pt, type: 'endpoint' }; }
         });
       } else if (entity.type === 'CIRCLE') {
-        const d = distance(worldPos, entity.center);
+        const d = distance(wPos, entity.center);
         if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
       } else if (entity.type === 'CIRCULAR_ARC') {
-        const d = distance(worldPos, entity.center);
+        const d = distance(wPos, entity.center);
         if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
       } else if (entity.type === 'POLYGON') {
-        const d = distance(worldPos, entity.center);
+        const d = distance(wPos, entity.center);
         if (d < minDist) { minDist = d; bestSnap = { point: entity.center, type: 'center' }; }
       }
     });
 
     setSnapPoint(bestSnap);
-    const bs = bestSnap as {point: Point, type: 'endpoint'|'center'} | null;
-    return bs ? bs.point : worldPos;
+    return bestSnap ? bestSnap.point : wPos;
   };
 
   // Hit testing
@@ -1175,6 +1189,75 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
       ctx.restore();
       
+      // Draw OTRACK acquired points (small crosses)
+      if (otrack) {
+        ctx.save();
+        ctx.strokeStyle = '#4dff4d';
+        ctx.lineWidth = 1;
+        acquiredPoints.forEach(p => {
+          const px = (p.x * zoom) + canvas.width/2 + pan.x;
+          const py = (-p.y * zoom) + canvas.height/2 + pan.y;
+          ctx.beginPath();
+          ctx.moveTo(px - 4, py - 4); ctx.lineTo(px + 4, py + 4);
+          ctx.moveTo(px - 4, py + 4); ctx.lineTo(px + 4, py - 4);
+          ctx.stroke();
+        });
+        
+        // Draw OTRACK tracking line
+        if (trackedPoint) {
+          const px = (trackedPoint.x * zoom) + canvas.width/2 + pan.x;
+          const py = (-trackedPoint.y * zoom) + canvas.height/2 + pan.y;
+          const cx = (cursorPos.x * zoom) + canvas.width/2 + pan.x;
+          const cy = (-cursorPos.y * zoom) + canvas.height/2 + pan.y;
+          
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(cx, cy);
+          
+          // extend line
+          const extLen = 1000;
+          const ang = Math.atan2(cy - py, cx - px);
+          ctx.lineTo(cx + Math.cos(ang)*extLen, cy + Math.sin(ang)*extLen);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Draw Polar/Ortho Tracking Line
+      if ((ortho || polar) && tempPoints.length > 0 && activeCommand && commandStep > 0 && !trackedPoint) {
+        let basePoint: Point | null = tempPoints[0];
+        if (typeof basePoint === 'object' && 'x' in basePoint) {
+          const dx = Math.abs(cursorPos.x - basePoint.x);
+          const dy = Math.abs(cursorPos.y - basePoint.y);
+          // Only draw if we actually aligned (ortho or polar angle)
+          // For simplicity, just draw a green dashed line from base to cursor if distance > 0
+          if (distance(basePoint, cursorPos) > 0.1 && (
+               (ortho && (dx < 0.01 || dy < 0.01)) ||
+               (polar) // If polar is active, handleMouseMove already snapped it if it was within 5 deg
+             )) {
+             const bx = (basePoint.x * zoom) + canvas.width/2 + pan.x;
+             const by = (-basePoint.y * zoom) + canvas.height/2 + pan.y;
+             const cx = (cursorPos.x * zoom) + canvas.width/2 + pan.x;
+             const cy = (-cursorPos.y * zoom) + canvas.height/2 + pan.y;
+             
+             ctx.save();
+             ctx.strokeStyle = '#4dff4d';
+             ctx.setLineDash([5, 5]);
+             ctx.beginPath();
+             ctx.moveTo(bx, by);
+             ctx.lineTo(cx, cy);
+             // extend line slightly past cursor for visual effect
+             const extLen = 1000;
+             const ang = Math.atan2(cy - by, cx - bx);
+             ctx.lineTo(cx + Math.cos(ang)*extLen, cy + Math.sin(ang)*extLen);
+             ctx.stroke();
+             ctx.restore();
+          }
+        }
+      }
+
+      // Draw Crosshair
       ctx.strokeStyle = '#cccccc';
       ctx.lineWidth = 1;
       const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;
@@ -1225,9 +1308,69 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
   const handleMouseMove = (e: ReactMouseEvent) => {
     let wPos = getWorldCoord(e);
-    const roundedPos = { x: Math.round(wPos.x * 2) / 2, y: Math.round(wPos.y * 2) / 2 };
     const snapped = calculateSnap(wPos); 
-    setCursorPos(snapped === wPos ? roundedPos : wPos); 
+    let finalPos = snapped;
+    setTrackedPoint(null);
+
+    if (otrack) {
+      if (snapped !== wPos) {
+        if (!acquiredPoints.some(p => distance(p, snapped) < 0.1)) {
+          setAcquiredPoints(prev => [...prev, snapped].slice(-3));
+        }
+      } else {
+        const snapDist = 10 / zoom;
+        let matched = null;
+        for (const p of acquiredPoints) {
+          if (Math.abs(wPos.x - p.x) < snapDist) {
+            finalPos = { x: p.x, y: wPos.y };
+            matched = p;
+            break;
+          } else if (Math.abs(wPos.y - p.y) < snapDist) {
+            finalPos = { x: wPos.x, y: p.y };
+            matched = p;
+            break;
+          }
+        }
+        if (matched) setTrackedPoint(matched);
+      }
+    }
+    
+    // If we didn't snap to an object or track point, apply Ortho / Polar
+    if (finalPos === wPos && tempPoints.length > 0 && activeCommand && commandStep > 0) {
+      let basePoint: Point | null = tempPoints[0];
+      
+      // For commands where tempPoints[0] is not a Point but a number/flag, skip ORTHO
+      if (typeof basePoint === 'object' && 'x' in basePoint) {
+        if (ortho) {
+          const dx = Math.abs(wPos.x - basePoint.x);
+          const dy = Math.abs(wPos.y - basePoint.y);
+          if (dx > dy) {
+            finalPos = { x: wPos.x, y: basePoint.y };
+          } else {
+            finalPos = { x: basePoint.x, y: wPos.y };
+          }
+        } else if (polar) {
+          const dx = wPos.x - basePoint.x;
+          const dy = wPos.y - basePoint.y;
+          let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          if (angle < 0) angle += 360;
+          const dist = distance(basePoint, wPos);
+          
+          const snapAngle = Math.round(angle / 45) * 45;
+          const diff = Math.abs(angle - snapAngle);
+          if (diff < 5 || diff > 355) {
+            const rad = snapAngle * Math.PI / 180;
+            finalPos = { x: basePoint.x + Math.cos(rad) * dist, y: basePoint.y + Math.sin(rad) * dist };
+          }
+        }
+      }
+    }
+    
+    const roundedPos = { x: Math.round(finalPos.x * 2) / 2, y: Math.round(finalPos.y * 2) / 2 };
+    const newCursorPos = snapped === wPos && finalPos === wPos ? roundedPos : finalPos;
+    
+    setCursorPos(newCursorPos);
+    onCursorMove(newCursorPos);
 
     if (isPanning) {
       setPan(prev => ({ x: prev.x + e.clientX - lastMousePos.x, y: prev.y + e.clientY - lastMousePos.y }));
@@ -1244,6 +1387,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       return;
     }
     if (e.button === 0) {
+      setAcquiredPoints([]);
       const wPos = getWorldCoord(e);
       const roundedPos = { x: Math.round(wPos.x * 2) / 2, y: Math.round(wPos.y * 2) / 2 };
       const sp = snapPoint as {point: Point, type: 'endpoint'|'center'} | null;

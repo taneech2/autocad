@@ -56,7 +56,15 @@ const generateRandomParams = (): LessonParams => {
 
 function App() {
   const [activeCommand, setActiveCommand] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState<string>('พิมพ์คำสั่งเพื่อเริ่มต้น... (Type a command)');
+  const [prompt, setPrompt] = useState<string>('Ready');
+  
+  // Status Bar States
+  const [cursorDisplay, setCursorDisplay] = useState<{x: number, y: number} | null>(null);
+  const [osnap, setOsnap] = useState<boolean>(true);
+  const [ortho, setOrtho] = useState<boolean>(false);
+  const [polar, setPolar] = useState<boolean>(false);
+  const [otrack, setOtrack] = useState<boolean>(false);
+
   const [commandInput, setCommandInput] = useState<string>('');
   const [history, setHistory] = useState<string[]>(['AutoCAD 2015 Interactive Learning Platform']);
   const [typedInputToProcess, setTypedInputToProcess] = useState<string | null>(null);
@@ -644,9 +652,14 @@ function App() {
             ref={canvasRef}
             activeCommand={activeCommand} 
             typedInputToProcess={typedInputToProcess}
+            osnap={osnap}
+            ortho={ortho}
+            polar={polar}
+            otrack={otrack}
             onCommandComplete={handleCommandComplete} 
             onPromptChange={setPrompt}
             onInputProcessed={() => setTypedInputToProcess(null)}
+            onCursorMove={setCursorDisplay}
           />
         </main>
       </div>
@@ -656,17 +669,30 @@ function App() {
           {history.map((msg, idx) => <div key={idx}>{msg}</div>)}
           <div ref={historyEndRef} />
         </div>
-        <div className="command-input-container">
-          <span className="command-prompt">{prompt}</span>
-          <input 
-            ref={inputRef}
-            type="text" 
-            className="command-input" 
-            autoFocus
-            value={commandInput}
-            onChange={e => setCommandInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
+        <div className="command-input-row">
+          <div className="command-input-container">
+            <span className="command-prompt">{prompt}</span>
+            <input 
+              ref={inputRef}
+              type="text" 
+              className="command-input" 
+              autoFocus
+              value={commandInput}
+              onChange={e => setCommandInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              spellCheck="false"
+              autoComplete="off"
+            />
+          </div>
+          <div className="status-bar">
+            <div className="coord-display">
+              {cursorDisplay ? `${cursorDisplay.x.toFixed(4)}, ${cursorDisplay.y.toFixed(4)}` : ''}
+            </div>
+            <button className={`status-btn ${osnap ? 'active' : ''}`} onClick={() => setOsnap(!osnap)}>OSNAP</button>
+            <button className={`status-btn ${otrack ? 'active' : ''}`} onClick={() => setOtrack(!otrack)}>OTRACK</button>
+            <button className={`status-btn ${ortho ? 'active' : ''}`} onClick={() => { setOrtho(!ortho); if (!ortho) setPolar(false); }}>ORTHO</button>
+            <button className={`status-btn ${polar ? 'active' : ''}`} onClick={() => { setPolar(!polar); if (!polar) setOrtho(false); }}>POLAR</button>
+          </div>
         </div>
       </footer>
     </div>
