@@ -56,6 +56,7 @@ const generateRandomParams = (): LessonParams => {
 
 function App() {
   const [activeCommand, setActiveCommand] = useState<string | null>(null);
+  const [lastCommand, setLastCommand] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<string>('Ready');
   
   // Status Bar States
@@ -159,6 +160,9 @@ function App() {
       setCommandInput('');
       return;
     }
+    if (cmd !== 'UNDO' && cmd !== 'GROUP' && cmd !== 'UNGROUP') {
+      setLastCommand(cmd);
+    }
     setActiveCommand(cmd);
     setHistory(prev => [...prev, `Command: ${cmd}`]);
     setTypedInputToProcess(null);
@@ -172,6 +176,10 @@ function App() {
       setCommandInput('');
 
       if (!activeCommand) {
+        if (input === '' && lastCommand) {
+          handleCommandClick(lastCommand);
+          return;
+        }
         if (input === 'L' || input === 'LINE') handleCommandClick('LINE');
         else if (input === 'C' || input === 'CIRCLE') handleCommandClick('CIRCLE');
         else if (input === 'REC' || input === 'RECTANGLE') handleCommandClick('RECTANGLE');
