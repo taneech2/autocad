@@ -3,6 +3,12 @@ import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } fro
 import { parseCoordinate } from './CommandEngine';
 
 export interface Point { x: number; y: number; }
+export interface Grip {
+  entityId: string;
+  point: Point;
+  type: 'START' | 'END' | 'MID' | 'CENTER' | 'QUADRANT' | 'CORNER' | 'CONTROL';
+  index?: number;
+}
 export interface BaseEntity { id: string; groupId?: string; }
 export interface Line extends BaseEntity { type: 'LINE'; start: Point; end: Point; }
 export interface Circle extends BaseEntity { type: 'CIRCLE'; center: Point; radius: number; }
@@ -15,6 +21,80 @@ export interface DimAngular extends BaseEntity { type: 'DIM_ANGULAR'; center: Po
 export interface Polygon extends BaseEntity { type: 'POLYGON'; center: Point; radius: number; sides: number; }
 export interface CircularArc extends BaseEntity { type: 'CIRCULAR_ARC'; center: Point; radius: number; startAngle: number; endAngle: number; }
 export type Entity = Line | Circle | Rectangle | Arc | Text | Dimension | DimAligned | DimAngular | Polygon | CircularArc;
+
+export const getEntityGrips = (entity: Entity): Grip[] => {
+  const grips: Grip[] = [];
+  if (entity.type === 'LINE') {
+    grips.push({ entityId: entity.id, point: entity.start, type: 'START' });
+    grips.push({ entityId: entity.id, point: { x: (entity.start.x + entity.end.x)/2, y: (entity.start.y + entity.end.y)/2 }, type: 'MID' });
+    grips.push({ entityId: entity.id, point: entity.end, type: 'END' });
+  } else if (entity.type === 'CIRCLE') {
+    grips.push({ entityId: entity.id, point: entity.center, type: 'CENTER' });
+    grips.push({ entityId: entity.id, point: { x: entity.center.x + entity.radius, y: entity.center.y }, type: 'QUADRANT', index: 0 });
+    grips.push({ entityId: entity.id, point: { x: entity.center.x, y: entity.center.y + entity.radius }, type: 'QUADRANT', index: 1 });
+    grips.push({ entityId: entity.id, point: { x: entity.center.x - entity.radius, y: entity.center.y }, type: 'QUADRANT', index: 2 });
+    grips.push({ entityId: entity.id, point: { x: entity.center.x, y: entity.center.y - entity.radius }, type: 'QUADRANT', index: 3 });
+  } else if (entity.type === 'RECTANGLE') {
+    grips.push({ entityId: entity.id, point: entity.p1, type: 'CORNER', index: 0 });
+    grips.push({ entityId: entity.id, point: { x: entity.p2.x, y: entity.p1.y }, type: 'CORNER', index: 1 });
+    grips.push({ entityId: entity.id, point: entity.p2, type: 'CORNER', index: 2 });
+    grips.push({ entityId: entity.id, point: { x: entity.p1.x, y: entity.p2.y }, type: 'CORNER', index: 3 });
+    grips.push({ entityId: entity.id, point: { x: (entity.p1.x + entity.p2.x)/2, y: (entity.p1.y + entity.p2.y)/2 }, type: 'CENTER' });
+  } else if (entity.type === 'ARC') {
+    grips.push({ entityId: entity.id, point: entity.start, type: 'START' });
+    grips.push({ entityId: entity.id, point: entity.control, type: 'CONTROL' });
+    grips.push({ entityId: entity.id, point: entity.end, type: 'END' });
+  } else if (entity.type === 'TEXT') {
+    grips.push({ entityId: entity.id, point: entity.start, type: 'START' });
+  } else if (entity.type === 'DIMENSION' || entity.type === 'DIM_ALIGNED') {
+    grips.push({ entityId: entity.id, point: entity.p1, type: 'START' });
+    grips.push({ entityId: entity.id, point: entity.p2, type: 'END' });
+    grips.push({ entityId: entity.id, point: entity.dimLinePos, type: 'CONTROL' });
+  } else if (entity.type === 'POLYGON') {
+    grips.push({ entityId: entity.id, point: entity.center, type: 'CENTER' });
+    grips.push({ entityId: entity.id, point: { x: entity.center.x + entity.radius, y: entity.center.y }, type: 'QUADRANT' });
+  } else if (entity.type === 'CIRCULAR_ARC') {
+    grips.push({ entityId: entity.id, point: entity.center, type: 'CENTER' });
+    grips.push({ entityId: entity.id, point: { x: entity.center.x + Math.cos(entity.startAngle*Math.PI/180)*entity.radius, y: entity.center.y + Math.sin(entity.startAngle*Math.PI/180)*entity.radius }, type: 'START' });
+    grips.push({ entityId: entity.id, point: { x: entity.center.x + Math.cos(entity.endAngle*Math.PI/180)*entity.radius, y: entity.center.y + Math.sin(entity.endAngle*Math.PI/180)*entity.radius }, type: 'END' });
+  }
+  return grips;
+};
+
+export const applyGripDrag = (entity: Entity, grip: Grip, newPos: Point): Entity => {
+  if (entity.type === 'LINE') {
+    if (grip.type === 'START') return { ...entity, start: newPos };
+    if (grip.type === 'END') return { ...entity, end: newPos };
+    if (grip.type === 'MID') {
+      const dx = newPos.x - grip.point.x;
+      const dy = newPos.y - grip.point.y;
+      return { ...entity, start: { x: entity.start.x + dx, y: entity.start.y + dy }, end: { x: entity.end.x + dx, y: entity.end.y + dy } };
+    }
+  } else if (entity.type === 'CIRCLE') {
+    if (grip.type === 'CENTER') return { ...entity, center: newPos };
+    if (grip.type === 'QUADRANT') return { ...entity, radius: Math.abs(distance(entity.center, newPos)) };
+  } else if (entity.type === 'RECTANGLE') {
+    if (grip.type === 'CENTER') {
+      const dx = newPos.x - grip.point.x;
+      const dy = newPos.y - grip.point.y;
+      return { ...entity, p1: { x: entity.p1.x + dx, y: entity.p1.y + dy }, p2: { x: entity.p2.x + dx, y: entity.p2.y + dy } };
+    }
+    if (grip.type === 'CORNER') {
+      if (grip.index === 0) return { ...entity, p1: newPos };
+      if (grip.index === 2) return { ...entity, p2: newPos };
+      if (grip.index === 1) return { ...entity, p1: { x: entity.p1.x, y: newPos.y }, p2: { x: newPos.x, y: entity.p2.y } };
+      if (grip.index === 3) return { ...entity, p1: { x: newPos.x, y: entity.p1.y }, p2: { x: entity.p2.x, y: newPos.y } };
+    }
+  } else if (entity.type === 'POLYGON') {
+    if (grip.type === 'CENTER') {
+      const dx = newPos.x - grip.point.x;
+      const dy = newPos.y - grip.point.y;
+      return { ...entity, center: { x: entity.center.x + dx, y: entity.center.y + dy } };
+    }
+    if (grip.type === 'QUADRANT') return { ...entity, radius: distance(entity.center, newPos) };
+  }
+  return entity;
+};
 
 export type OsnapSettings = {
   endpoint: boolean;
@@ -247,6 +327,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectionBox, setSelectionBox] = useState<{start: Point, end: Point} | null>(null);
+  
+  // Grip editing state
+  const [hoveredGrip, setHoveredGrip] = useState<Grip | null>(null);
+  const [activeGrip, setActiveGrip] = useState<Grip | null>(null);
+  const [dragStartPos, setDragStartPos] = useState<Point | null>(null);
+  const [originalEntity, setOriginalEntity] = useState<Entity | null>(null);
 
   // Command state
   const [commandStep, setCommandStep] = useState<number>(0);
@@ -287,13 +373,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       }
       
       if (e.key === 'Escape') {
+        setActiveGrip(null);
+        setHoveredGrip(null);
         if (activeCommand === 'LINE' && commandStep === 1) {
           onCommandComplete();
-          setSelectedIds(new Set());
-        } else if (activeCommand) {
-          onCommandComplete();
-          setSelectedIds(new Set());
         } else {
+          onCommandComplete();
           setSelectedIds(new Set());
         }
       }
@@ -1110,8 +1195,35 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       drawUCS(ctx);
 
       entities.forEach(entity => {
-        drawEntity(ctx, entity, selectedIds.has(entity.id));
+        if (activeGrip && originalEntity && entity.id === activeGrip.entityId) {
+          const modified = applyGripDrag(originalEntity, activeGrip, cursorPos);
+          drawEntity(ctx, modified, true);
+        } else {
+          drawEntity(ctx, entity, selectedIds.has(entity.id));
+        }
       });
+
+      if (!activeCommand && selectedIds.size > 0) {
+        entities.forEach(entity => {
+          if (selectedIds.has(entity.id)) {
+            const grips = getEntityGrips(entity);
+            grips.forEach(g => {
+              const isHovered = hoveredGrip && hoveredGrip.entityId === g.entityId && hoveredGrip.type === g.type && hoveredGrip.index === g.index;
+              const isActive = activeGrip && activeGrip.entityId === g.entityId && activeGrip.type === g.type && activeGrip.index === g.index;
+              
+              ctx.fillStyle = isActive ? '#ff0000' : (isHovered ? '#ff8800' : '#0055ff');
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1/zoom;
+              const size = 8/zoom;
+              
+              ctx.beginPath();
+              ctx.rect(g.point.x - size/2, g.point.y - size/2, size, size);
+              ctx.fill();
+              ctx.stroke();
+            });
+          }
+        });
+      }
 
       if (activeCommand === 'LINE' && commandStep === 1 && tempPoints.length > 0) {
         drawEntity(ctx, { id: 'temp', type: 'LINE', start: tempPoints[tempPoints.length - 1], end: cursorPos }, false, true);
@@ -1401,7 +1513,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
     render();
     return () => window.removeEventListener('resize', resizeCanvas);
-  }, [pan, zoom, entities, cursorPos, activeCommand, commandStep, tempPoints, selectedIds, snapPoint, selectionBox]);
+  }, [pan, zoom, entities, cursorPos, activeCommand, commandStep, tempPoints, selectedIds, snapPoint, selectionBox, hoveredGrip, activeGrip]);
 
   const drawGrid = (ctx: CanvasRenderingContext2D) => {
     ctx.strokeStyle = '#3e3e42';
@@ -1441,6 +1553,21 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     const snapped = calculateSnap(wPos); 
     let finalPos = snapped;
     setTrackedPoint(null);
+
+    let hitGrip: Grip | null = null;
+    if (!activeCommand && selectedIds.size > 0 && !activeGrip) {
+      const gripThreshold = 10 / zoom;
+      entities.filter(ent => selectedIds.has(ent.id)).forEach(ent => {
+        const grips = getEntityGrips(ent);
+        grips.forEach(g => {
+          if (distance(wPos, g.point) < gripThreshold) {
+            hitGrip = g;
+            finalPos = g.point; // Snap to grip
+          }
+        });
+      });
+    }
+    setHoveredGrip(hitGrip);
 
     if (otrack) {
       if (snapped !== wPos) {
@@ -1523,6 +1650,14 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
       const sp = snapPoint as {point: Point, type: SnapType} | null;
       const pt = sp ? sp.point : roundedPos;
       
+      if (!activeCommand && hoveredGrip) {
+        setActiveGrip(hoveredGrip);
+        setDragStartPos(pt);
+        const ent = entities.find(e => e.id === hoveredGrip.entityId);
+        if (ent) setOriginalEntity(ent);
+        return;
+      }
+      
       if (!activeCommand || ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR' || activeCommand === 'ARRAY' || activeCommand === 'EXPLODE') && commandStep === 0)) {
          const hitId = hitTest(wPos);
          if (hitId) {
@@ -1564,6 +1699,16 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
 
   const handleMouseUp = () => {
     setIsPanning(false);
+
+    if (activeGrip && dragStartPos && originalEntity) {
+      const modified = applyGripDrag(originalEntity, activeGrip, cursorPos);
+      setEntities(prev => prev.map(e => e.id === modified.id ? modified : e));
+      setActiveGrip(null);
+      setDragStartPos(null);
+      setOriginalEntity(null);
+      return;
+    }
+
     if (selectionBox) {
        const isLeftToRight = selectionBox.end.x > selectionBox.start.x;
        const minX = Math.min(selectionBox.start.x, selectionBox.end.x);
@@ -2218,6 +2363,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT') return;
       if (e.key === 'Escape') {
+        setActiveGrip(null);
+        setHoveredGrip(null);
         onCommandComplete();
       } else if (e.key === 'Enter') {
          if ((activeCommand === 'MOVE' || activeCommand === 'COPY' || activeCommand === 'ROTATE' || activeCommand === 'SCALE' || activeCommand === 'MIRROR') && commandStep === 0) {
