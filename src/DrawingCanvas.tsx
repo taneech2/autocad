@@ -115,10 +115,12 @@ interface DrawingCanvasProps {
   polar: boolean;
   polarAngle: number;
   otrack: boolean;
+  dyn: boolean;
   onCommandComplete: () => void;
   onPromptChange: (prompt: string) => void;
   onInputProcessed: () => void;
   onCursorMove: (pos: Point | null) => void;
+  onDynSubmit?: (val: string) => void;
 }
 
 export interface DrawingCanvasHandle {
@@ -290,10 +292,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   polar,
   polarAngle,
   otrack,
+  dyn,
   onCommandComplete,
   onPromptChange,
   onInputProcessed,
-  onCursorMove
+  onCursorMove,
+  onDynSubmit
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -339,6 +343,15 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
   const [stretchedPoints, setStretchedPoints] = useState<{id: string, isStart: boolean}[]>([]);
 
+  // Dynamic Input state
+  const [dynActive, setDynActive] = useState<boolean>(false);
+  const [dynDistance, setDynDistance] = useState<string>('');
+  const [dynAngle, setDynAngle] = useState<string>('');
+  const [dynFocus, setDynFocus] = useState<'distance' | 'angle'>('distance');
+  const [dynUserEdited, setDynUserEdited] = useState<boolean>(false);
+  const [mouseScreenPos, setMouseScreenPos] = useState<{x: number, y: number}>({ x: 0, y: 0 });
+
+  // View state
   useImperativeHandle(ref, () => ({
     getEntities: () => entities,
     undo: () => {
@@ -1628,6 +1641,23 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     
     setCursorPos(newCursorPos);
     onCursorMove(newCursorPos);
+    setMouseScreenPos({ x: e.clientX, y: e.clientY });
+
+    if (dyn && activeCommand && commandStep > 0 && tempPoints.length > 0) {
+      setDynActive(true);
+      if (!dynUserEdited) {
+        const basePoint = tempPoints[0];
+        if (typeof basePoint === 'object' && 'x' in basePoint) {
+          const dist = distance(basePoint, newCursorPos);
+          let angle = Math.atan2(newCursorPos.y - basePoint.y, newCursorPos.x - basePoint.x) * 180 / Math.PI;
+          if (angle < 0) angle += 360;
+          setDynDistance(dist.toFixed(4));
+          setDynAngle(angle.toFixed(0));
+        }
+      }
+    } else {
+      setDynActive(false);
+    }
 
     if (isPanning) {
       setPan(prev => ({ x: prev.x + e.clientX - lastMousePos.x, y: prev.y + e.clientY - lastMousePos.y }));
@@ -2410,8 +2440,75 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onCommandComplete, activeCommand, commandStep, selectedIds.size]);
 
+  const dynDistRef = useRef<HTMLInputElement>(null);
+  const dynAngleRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (dynActive) {
+      if (dynFocus === 'distance') {
+        dynDistRef.current?.focus();
+        if (!dynUserEdited) dynDistRef.current?.select();
+      } else {
+        dynAngleRef.current?.focus();
+        if (!dynUserEdited) dynAngleRef.current?.select();
+      }
+    }
+  }, [dynActive, dynFocus, dynUserEdited]);
+
+  const handleDynKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      setDynFocus(prev => prev === 'distance' ? 'angle' : 'distance');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (onDynSubmit) {
+        onDynSubmit(`@${dynDistance}<${dynAngle}`);
+      }
+      setDynUserEdited(false);
+      setDynActive(false);
+    }
+  };
+
   return (
-    <canvas ref={canvasRef} onMouseMove={handleMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onWheel={handleWheel} onContextMenu={(e) => e.preventDefault()} style={{ touchAction: 'none' }} />
+    <>
+      <canvas ref={canvasRef} onMouseMove={handleMouseMove} onMouseDown={handleMouseDown} onMouseUp={handleMouseUp} onWheel={handleWheel} onContextMenu={(e) => e.preventDefault()} style={{ touchAction: 'none' }} />
+      {dynActive && (
+        <div style={{
+          position: 'fixed',
+          left: mouseScreenPos.x + 15,
+          top: mouseScreenPos.y + 15,
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center',
+          pointerEvents: 'auto',
+          zIndex: 1000
+        }}>
+          <div style={{ backgroundColor: dynFocus === 'distance' ? '#333' : '#222', border: dynFocus === 'distance' ? '1px solid #4af' : '1px solid #555', padding: '2px 4px', display: 'flex', alignItems: 'center' }}>
+            <input
+              ref={dynDistRef}
+              type="text"
+              value={dynDistance}
+              onChange={e => { setDynUserEdited(true); setDynDistance(e.target.value); }}
+              onKeyDown={handleDynKeyDown}
+              onFocus={() => setDynFocus('distance')}
+              style={{ width: '60px', background: 'transparent', border: 'none', color: '#fff', outline: 'none', textAlign: 'right', fontSize: '12px' }}
+            />
+          </div>
+          <div style={{ backgroundColor: dynFocus === 'angle' ? '#333' : '#222', border: dynFocus === 'angle' ? '1px solid #4af' : '1px solid #555', padding: '2px 4px', display: 'flex', alignItems: 'center' }}>
+            <input
+              ref={dynAngleRef}
+              type="text"
+              value={dynAngle}
+              onChange={e => { setDynUserEdited(true); setDynAngle(e.target.value); }}
+              onKeyDown={handleDynKeyDown}
+              onFocus={() => setDynFocus('angle')}
+              style={{ width: '40px', background: 'transparent', border: 'none', color: '#fff', outline: 'none', textAlign: 'right', fontSize: '12px' }}
+            />
+            <span style={{ color: '#aaa', fontSize: '12px', marginLeft: '2px' }}>°</span>
+          </div>
+        </div>
+      )}
+    </>
   );
 });
 

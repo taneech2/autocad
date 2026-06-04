@@ -77,6 +77,7 @@ function App() {
   const [polarAngle, setPolarAngle] = useState<number>(45);
   const [showPolarMenu, setShowPolarMenu] = useState<boolean>(false);
   const [otrack, setOtrack] = useState<boolean>(false);
+  const [dyn, setDyn] = useState<boolean>(true); // Dynamic Input enabled by default
 
   const [commandInput, setCommandInput] = useState<string>('');
   const [history, setHistory] = useState<string[]>(['AutoCAD 2015 Interactive Learning Platform']);
@@ -215,6 +216,13 @@ function App() {
       handleCommandComplete();
     }
   };
+
+  const handleDynSubmit = (val: string) => {
+    setHistory(prev => [...prev, `> ${val}`]);
+    setTypedInputToProcess(val);
+  };
+
+
 
   const handleCommandComplete = () => {
     setActiveCommand(null);
@@ -700,10 +708,12 @@ function App() {
             polar={polar}
             polarAngle={polarAngle}
             otrack={otrack}
+            dyn={dyn}
             onCommandComplete={handleCommandComplete} 
             onPromptChange={setPrompt}
             onInputProcessed={() => setTypedInputToProcess(null)}
             onCursorMove={setCursorDisplay}
+            onDynSubmit={handleDynSubmit}
           />
         </main>
       </div>
@@ -751,6 +761,7 @@ function App() {
                 </div>
               )}
             </div>
+            <button className={`status-btn ${dyn ? 'active' : ''}`} onClick={() => setDyn(!dyn)}>DYN</button>
             <button className={`status-btn ${otrack ? 'active' : ''}`} onClick={() => setOtrack(!otrack)}>OTRACK</button>
             <button className={`status-btn ${ortho ? 'active' : ''}`} onClick={() => { setOrtho(!ortho); if (!ortho) setPolar(false); }}>ORTHO</button>
             <div className="status-btn-group">
