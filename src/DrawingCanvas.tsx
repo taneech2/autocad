@@ -2424,6 +2424,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(({
                          end: { x: e.center.x + e.radius * Math.cos(a2), y: e.center.y + e.radius * Math.sin(a2) }
                        });
                      }
+                   } else if (e.groupId) {
+                     next[idx] = { ...e, groupId: undefined };
                    }
                  }
                });
